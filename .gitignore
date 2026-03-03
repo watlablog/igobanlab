@@ -1,0 +1,15 @@
+node_modules/
+web/node_modules/
+web/dist/
+api/.venv/
+.DS_Store
+firebase-debug.log
+.firebase/
+web/.firebase/
+
+# Env files (keep only examples in git)
+.env*
+!.env.example
+!.env.sample
+web/.env*
+!web/.env.example
