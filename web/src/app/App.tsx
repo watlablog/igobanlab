@@ -2,91 +2,137 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import type { User } from "firebase/auth";
 import { Controls } from "../ui/Controls";
 import { GobanView } from "../ui/GobanView";
-import { Header } from "../ui/Header";
 import { exportMinimalSgf } from "../game/sgf";
-import { createInitialState, gameReducer } from "../game/state";
-import { loadActiveGame, saveActiveGame } from "../firebase/db";
-import { signInWithGoogle, signOutUser, subscribeAuth } from "../firebase/auth";
+import { createStateFromSetup, gameReducer, stateFromSnapshot } from "../game/state";
+import { saveActiveGame } from "../firebase/db";
+import { signInWithGoogle, subscribeAuth } from "../firebase/auth";
 import { isFirebaseConfigured } from "../firebase/firebase";
+import type { GameSetup } from "../types/models";
+
+type AppScreen = "login" | "menu" | "setup" | "board";
+
+type HandicapSelection = "even" | "teisen" | "h2" | "h3" | "h4" | "h5" | "h6" | "h7" | "h8" | "h9";
+
+type SetupDraft = {
+  boardSize: number;
+  komi: number;
+  handicapSelection: HandicapSelection;
+};
+
+type GameInfo = {
+  gameDate: string;
+  blackName: string;
+  whiteName: string;
+  blackRank: string;
+  whiteRank: string;
+  location: string;
+};
 
 const SAVE_DEBOUNCE_MS = 300;
+const BOARD_SIZE_OPTIONS = [9, 13, 19] as const;
+const DEFAULT_HANDICAP_SELECTION: HandicapSelection = "even";
+
+const HANDICAP_SELECTION_OPTIONS: Array<{ value: HandicapSelection; label: string }> = [
+  { value: "even", label: "互先" },
+  { value: "teisen", label: "定先" },
+  { value: "h2", label: "置き石 2子" },
+  { value: "h3", label: "置き石 3子" },
+  { value: "h4", label: "置き石 4子" },
+  { value: "h5", label: "置き石 5子" },
+  { value: "h6", label: "置き石 6子" },
+  { value: "h7", label: "置き石 7子" },
+  { value: "h8", label: "置き石 8子" },
+  { value: "h9", label: "置き石 9子" }
+];
+
+const DEFAULT_SETUP_DRAFT: SetupDraft = {
+  boardSize: 19,
+  komi: 6.5,
+  handicapSelection: DEFAULT_HANDICAP_SELECTION
+};
+
+const DEFAULT_SETUP: GameSetup = {
+  boardSize: 19,
+  komi: 6.5,
+  handicap: 0
+};
+
+const DEFAULT_GAME_INFO: GameInfo = {
+  gameDate: "",
+  blackName: "",
+  whiteName: "",
+  blackRank: "",
+  whiteRank: "",
+  location: ""
+};
+
+const isHandicapSelection = (value: string): value is HandicapSelection =>
+  HANDICAP_SELECTION_OPTIONS.some((option) => option.value === value);
+
+const normalizeBoardSize = (value: number): number =>
+  BOARD_SIZE_OPTIONS.includes(value as (typeof BOARD_SIZE_OPTIONS)[number]) ? value : 19;
+
+const normalizeKomi = (value: number, fallback: number): number => {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.round(value * 2) / 2;
+};
+
+const selectionToHandicap = (selection: HandicapSelection): number => {
+  if (!selection.startsWith("h")) {
+    return 0;
+  }
+  return Number(selection.slice(1));
+};
+
+const setupFromDraft = (draft: SetupDraft, fallbackEvenKomi: number): GameSetup => {
+  const boardSize = normalizeBoardSize(draft.boardSize);
+  const fallbackKomi = draft.handicapSelection === "even" ? fallbackEvenKomi : 0;
+  const komi = normalizeKomi(draft.komi, fallbackKomi);
+  const handicap = selectionToHandicap(draft.handicapSelection);
+  return { boardSize, komi, handicap };
+};
+
+const handicapSummaryLabel = (selection: HandicapSelection): string => {
+  const option = HANDICAP_SELECTION_OPTIONS.find((candidate) => candidate.value === selection);
+  return option ? option.label : "互先";
+};
 
 export const App = () => {
-  const [state, dispatch] = useReducer(gameReducer, undefined, () => createInitialState(19));
+  const [state, dispatch] = useReducer(gameReducer, undefined, () => createStateFromSetup(DEFAULT_SETUP));
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [loadingGame, setLoadingGame] = useState(false);
-  const [statusMessage, setStatusMessage] = useState("Ready");
+  const [screen, setScreen] = useState<AppScreen>("login");
 
-  const hasLoadedForUidRef = useRef<string | null>(null);
+  const [activeSetup, setActiveSetup] = useState<GameSetup>(DEFAULT_SETUP);
+  const [activeHandicapSelection, setActiveHandicapSelection] =
+    useState<HandicapSelection>(DEFAULT_HANDICAP_SELECTION);
+  const [setupDraft, setSetupDraft] = useState<SetupDraft>(DEFAULT_SETUP_DRAFT);
+  const [evenKomiMemory, setEvenKomiMemory] = useState(DEFAULT_SETUP.komi);
+  const [statusMessage, setStatusMessage] = useState("準備完了");
+
+  const [gameInfo, setGameInfo] = useState<GameInfo>(DEFAULT_GAME_INFO);
+  const [moveNotes, setMoveNotes] = useState<Record<number, string>>({});
+  const [reviewPly, setReviewPly] = useState(0);
+  const moveCountRef = useRef(0);
 
   useEffect(() => {
     if (!isFirebaseConfigured) {
       setAuthReady(true);
+      setScreen("login");
       return;
     }
 
     const unsubscribe = subscribeAuth((nextUser) => {
       setUser(nextUser);
       setAuthReady(true);
+      setScreen(nextUser ? "menu" : "login");
     });
 
     return unsubscribe;
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-
-    if (!isFirebaseConfigured) {
-      return;
-    }
-
-    if (!user) {
-      dispatch({ type: "RESET", boardSize: 19 });
-      hasLoadedForUidRef.current = null;
-      setStatusMessage("Sign in to load/save your active game.");
-      return;
-    }
-
-    const load = async (): Promise<void> => {
-      setLoadingGame(true);
-      try {
-        const loaded = await loadActiveGame(user.uid);
-        if (cancelled) return;
-
-        if (loaded) {
-          dispatch({ type: "LOAD", state: loaded });
-          setStatusMessage("Active game loaded.");
-        } else {
-          dispatch({ type: "RESET", boardSize: 19 });
-          setStatusMessage("No saved game. Started a new board.");
-        }
-
-        hasLoadedForUidRef.current = user.uid;
-      } catch {
-        if (!cancelled) {
-          setStatusMessage("Failed to load saved game.");
-        }
-      } finally {
-        if (!cancelled) {
-          setLoadingGame(false);
-        }
-      }
-    };
-
-    void load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user]);
-
-  useEffect(() => {
-    if (!isFirebaseConfigured || !user) {
-      return;
-    }
-
-    if (hasLoadedForUidRef.current !== user.uid || loadingGame) {
+    if (!isFirebaseConfigured || !user || screen !== "board") {
       return;
     }
 
@@ -102,40 +148,77 @@ export const App = () => {
     return () => {
       window.clearTimeout(timer);
     };
-  }, [state, user, loadingGame]);
+  }, [screen, state, user]);
+
+  useEffect(() => {
+    const previousMoveCount = moveCountRef.current;
+    if (state.moves.length > previousMoveCount) {
+      setReviewPly(state.moves.length);
+    } else {
+      setReviewPly((prev) => Math.min(prev, state.moves.length));
+    }
+    moveCountRef.current = state.moves.length;
+  }, [state.moves.length]);
 
   const playEnabled = useMemo(() => {
-    if (!isFirebaseConfigured) return true;
-    return Boolean(user) && !loadingGame;
-  }, [user, loadingGame]);
+    if (screen !== "board") return false;
+    if (!isFirebaseConfigured) return false;
+    return Boolean(user);
+  }, [screen, user]);
+
+  const isReviewingPast = reviewPly < state.moves.length;
+  const interactionDisabled = !playEnabled || isReviewingPast;
+
+  const displayState = useMemo(() => {
+    if (reviewPly === state.moves.length) {
+      return state;
+    }
+
+    const snapshot = state.history[reviewPly];
+    if (!snapshot) {
+      return state;
+    }
+
+    return stateFromSnapshot(snapshot);
+  }, [reviewPly, state]);
+
+  const handleSignIn = useCallback(async () => {
+    try {
+      await signInWithGoogle();
+    } catch {
+      setStatusMessage("ログインに失敗しました。再度お試しください。");
+    }
+  }, []);
 
   const handlePlay = useCallback(
     (x: number, y: number) => {
-      if (!playEnabled) return;
+      if (interactionDisabled) return;
       dispatch({ type: "PLAY", move: { x, y } });
     },
-    [playEnabled]
+    [interactionDisabled]
   );
 
   const handlePass = useCallback(() => {
-    if (!playEnabled) return;
+    if (interactionDisabled) return;
     dispatch({ type: "PASS" });
-  }, [playEnabled]);
+  }, [interactionDisabled]);
 
   const handleUndo = useCallback(() => {
-    if (!playEnabled) return;
+    if (interactionDisabled) return;
     dispatch({ type: "UNDO" });
-  }, [playEnabled]);
+  }, [interactionDisabled]);
 
   const handleRedo = useCallback(() => {
-    if (!playEnabled) return;
+    if (interactionDisabled) return;
     dispatch({ type: "REDO" });
-  }, [playEnabled]);
+  }, [interactionDisabled]);
 
   const handleNewGame = useCallback(() => {
-    if (!playEnabled) return;
-    dispatch({ type: "RESET", boardSize: state.boardSize });
-  }, [playEnabled, state.boardSize]);
+    if (interactionDisabled) return;
+    dispatch({ type: "LOAD", state: createStateFromSetup(activeSetup) });
+    setMoveNotes({});
+    setStatusMessage("新しい盤面を開始しました。");
+  }, [activeSetup, interactionDisabled]);
 
   const handleExportSgf = useCallback(() => {
     const sgf = exportMinimalSgf(state.boardSize, state.moves);
@@ -150,26 +233,369 @@ export const App = () => {
     URL.revokeObjectURL(url);
   }, [state.boardSize, state.moves]);
 
+  const openSetup = useCallback(() => {
+    setSetupDraft({
+      boardSize: activeSetup.boardSize,
+      komi: activeSetup.komi,
+      handicapSelection: activeHandicapSelection
+    });
+    setScreen("setup");
+  }, [activeHandicapSelection, activeSetup]);
+
+  const applySetup = useCallback(() => {
+    const normalizedSelection = isHandicapSelection(setupDraft.handicapSelection)
+      ? setupDraft.handicapSelection
+      : DEFAULT_HANDICAP_SELECTION;
+
+    const normalizedDraft: SetupDraft = {
+      boardSize: normalizeBoardSize(setupDraft.boardSize),
+      komi: setupDraft.komi,
+      handicapSelection: normalizedSelection
+    };
+
+    const normalizedSetup = setupFromDraft(normalizedDraft, evenKomiMemory);
+
+    if (normalizedSelection === "even") {
+      setEvenKomiMemory(normalizedSetup.komi);
+    }
+
+    setActiveSetup(normalizedSetup);
+    setActiveHandicapSelection(normalizedSelection);
+    setMoveNotes({});
+    setReviewPly(0);
+    moveCountRef.current = 0;
+    dispatch({ type: "LOAD", state: createStateFromSetup(normalizedSetup) });
+    setStatusMessage("盤面を開始しました。");
+    setScreen("board");
+  }, [evenKomiMemory, setupDraft]);
+
+  const clearBoardSession = useCallback(() => {
+    setActiveSetup(DEFAULT_SETUP);
+    setActiveHandicapSelection(DEFAULT_HANDICAP_SELECTION);
+    setSetupDraft(DEFAULT_SETUP_DRAFT);
+    setEvenKomiMemory(DEFAULT_SETUP.komi);
+    setGameInfo(DEFAULT_GAME_INFO);
+    setMoveNotes({});
+    setReviewPly(0);
+    moveCountRef.current = 0;
+    dispatch({ type: "LOAD", state: createStateFromSetup(DEFAULT_SETUP) });
+    setStatusMessage("準備完了");
+  }, []);
+
+  const backToMenuFromBoard = useCallback(() => {
+    clearBoardSession();
+    setScreen("menu");
+  }, [clearBoardSession]);
+
+  const updateInfoField = useCallback((key: keyof GameInfo, value: string) => {
+    setGameInfo((prev) => ({ ...prev, [key]: value }));
+  }, []);
+
+  const currentMoveNote = reviewPly > 0 ? moveNotes[reviewPly] ?? "" : "";
+
+  const stepBackward = useCallback(() => {
+    setReviewPly((prev) => Math.max(0, prev - 1));
+  }, []);
+
+  const stepForward = useCallback(() => {
+    setReviewPly((prev) => Math.min(state.moves.length, prev + 1));
+  }, [state.moves.length]);
+
+  const stepBackward10 = useCallback(() => {
+    setReviewPly((prev) => Math.max(0, prev - 10));
+  }, []);
+
+  const stepForward10 = useCallback(() => {
+    setReviewPly((prev) => Math.min(state.moves.length, prev + 10));
+  }, [state.moves.length]);
+
+  const handleKomiChange = useCallback((value: number) => {
+    setSetupDraft((prev) => {
+      const next = { ...prev, komi: value };
+      if (prev.handicapSelection === "even") {
+        setEvenKomiMemory(value);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleHandicapChange = useCallback(
+    (selection: HandicapSelection) => {
+      setSetupDraft((prev) => {
+        if (prev.handicapSelection === selection) {
+          return prev;
+        }
+
+        if (prev.handicapSelection === "even" && selection !== "even") {
+          setEvenKomiMemory(prev.komi);
+        }
+
+        if (selection === "even") {
+          return {
+            ...prev,
+            handicapSelection: selection,
+            komi: evenKomiMemory
+          };
+        }
+
+        return {
+          ...prev,
+          handicapSelection: selection,
+          komi: 0
+        };
+      });
+    },
+    [evenKomiMemory]
+  );
+
+  if (!authReady) {
+    return (
+      <main className="app-shell screen-center">
+        <section className="screen-card narrow">
+          <p className="muted">認証状態を確認中...</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (screen === "login") {
+    return (
+      <main className="app-shell screen-center">
+        <section className="screen-card narrow">
+          <h1>iGobanLab</h1>
+          <button
+            type="button"
+            className="primary large"
+            onClick={() => void handleSignIn()}
+            disabled={!isFirebaseConfigured}
+          >
+            Googleでログイン
+          </button>
+          {!isFirebaseConfigured && (
+            <p className="warning-text">Firebaseが未設定のためログインできません。</p>
+          )}
+        </section>
+      </main>
+    );
+  }
+
+  if (screen === "menu") {
+    return (
+      <main className="app-shell screen-center">
+        <section className="screen-card narrow">
+          <h1>メニュー</h1>
+          <button type="button" className="primary large" onClick={openSetup}>
+            棋譜並べ
+          </button>
+        </section>
+      </main>
+    );
+  }
+
+  if (screen === "setup") {
+    return (
+      <main className="app-shell screen-center">
+        <section className="screen-card setup-card">
+          <h1>棋譜並べ設定</h1>
+
+          <label className="form-row">
+            <span>碁盤サイズ</span>
+            <select
+              value={setupDraft.boardSize}
+              onChange={(event) =>
+                setSetupDraft((prev) => ({ ...prev, boardSize: Number(event.target.value) }))
+              }
+            >
+              {BOARD_SIZE_OPTIONS.map((size) => (
+                <option key={size} value={size}>
+                  {size}路盤
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="form-row">
+            <span>コミ</span>
+            <input
+              type="number"
+              step="0.5"
+              value={setupDraft.komi}
+              onChange={(event) => handleKomiChange(Number(event.target.value))}
+            />
+          </label>
+
+          <label className="form-row">
+            <span>ハンディキャップ</span>
+            <select
+              value={setupDraft.handicapSelection}
+              onChange={(event) => {
+                const value = event.target.value;
+                if (isHandicapSelection(value)) {
+                  handleHandicapChange(value);
+                }
+              }}
+            >
+              {HANDICAP_SELECTION_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="setup-actions">
+            <button type="button" onClick={() => setScreen("menu")}>
+              戻る
+            </button>
+            <button type="button" className="primary" onClick={applySetup}>
+              OK
+            </button>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="app-shell">
-      <Header
-        user={user}
-        authReady={authReady}
-        firebaseEnabled={isFirebaseConfigured}
-        onSignIn={signInWithGoogle}
-        onSignOut={signOutUser}
-      />
+      <header className="header-card">
+        <div>
+          <h1>棋譜並べ</h1>
+          <p className="muted">
+            {activeSetup.boardSize}路盤 / コミ {activeSetup.komi} / ハンディキャップ {handicapSummaryLabel(activeHandicapSelection)}
+          </p>
+        </div>
+        <button type="button" onClick={backToMenuFromBoard}>
+          戻る
+        </button>
+      </header>
 
       <div className="workspace">
-        <GobanView state={state} disabled={!playEnabled} onPlay={handlePlay} />
+        <div className="board-panel">
+          <section className="goban-card board-frame">
+            <div className="board-frame-top">
+              <span className="ply-badge">
+                {reviewPly} / {state.moves.length}手
+              </span>
+            </div>
+
+            <GobanView state={displayState} disabled={interactionDisabled} onPlay={handlePlay} />
+
+            <div className="move-nav-actions">
+              <button type="button" onClick={stepBackward10} disabled={reviewPly === 0} aria-label="10手戻る">
+                {"<<"}
+              </button>
+              <button type="button" onClick={stepBackward} disabled={reviewPly === 0} aria-label="1手戻る">
+                {"<"}
+              </button>
+              <button
+                type="button"
+                onClick={stepForward}
+                disabled={reviewPly >= state.moves.length}
+                aria-label="1手進む"
+              >
+                {">"}
+              </button>
+              <button
+                type="button"
+                onClick={stepForward10}
+                disabled={reviewPly >= state.moves.length}
+                aria-label="10手進む"
+              >
+                {">>"}
+              </button>
+            </div>
+
+            <label className="form-row compact">
+              <span>{reviewPly === 0 ? "開始局面メモ" : `${reviewPly}手目メモ`}</span>
+              <textarea
+                className="note-input"
+                value={currentMoveNote}
+                onChange={(event) => {
+                  if (reviewPly === 0) return;
+                  setMoveNotes((prev) => ({ ...prev, [reviewPly]: event.target.value }));
+                }}
+                placeholder={reviewPly === 0 ? "1手目以降でメモできます" : `${reviewPly}手目のメモ`}
+                disabled={reviewPly === 0}
+              />
+            </label>
+
+            {isReviewingPast && (
+              <p className="muted">過去局面の確認中です。着手するには最後の手まで進めてください。</p>
+            )}
+          </section>
+        </div>
 
         <div className="sidebar">
+          <section className="status-card">
+            <strong>対局情報</strong>
+
+            <label className="form-row compact">
+              <span>対局日</span>
+              <input
+                type="date"
+                value={gameInfo.gameDate}
+                onChange={(event) => updateInfoField("gameDate", event.target.value)}
+              />
+            </label>
+
+            <label className="form-row compact">
+              <span>黒番 対局者</span>
+              <input
+                type="text"
+                value={gameInfo.blackName}
+                onChange={(event) => updateInfoField("blackName", event.target.value)}
+                placeholder="例: 黒 太郎"
+              />
+            </label>
+
+            <label className="form-row compact">
+              <span>黒番 段級位</span>
+              <input
+                type="text"
+                value={gameInfo.blackRank}
+                onChange={(event) => updateInfoField("blackRank", event.target.value)}
+                placeholder="例: 3段"
+              />
+            </label>
+
+            <label className="form-row compact">
+              <span>白番 対局者</span>
+              <input
+                type="text"
+                value={gameInfo.whiteName}
+                onChange={(event) => updateInfoField("whiteName", event.target.value)}
+                placeholder="例: 白 花子"
+              />
+            </label>
+
+            <label className="form-row compact">
+              <span>白番 段級位</span>
+              <input
+                type="text"
+                value={gameInfo.whiteRank}
+                onChange={(event) => updateInfoField("whiteRank", event.target.value)}
+                placeholder="例: 2段"
+              />
+            </label>
+
+            <label className="form-row compact">
+              <span>対局場所</span>
+              <input
+                type="text"
+                value={gameInfo.location}
+                onChange={(event) => updateInfoField("location", event.target.value)}
+                placeholder="例: 自宅 / 碁会所"
+              />
+            </label>
+          </section>
+
           <Controls
-            toPlay={state.toPlay}
-            captures={state.captures}
+            toPlay={displayState.toPlay}
+            captures={displayState.captures}
             canUndo={state.history.length > 0}
             canRedo={state.future.length > 0}
-            disabled={!playEnabled}
+            disabled={interactionDisabled}
             onPass={handlePass}
             onUndo={handleUndo}
             onRedo={handleRedo}
@@ -180,7 +606,6 @@ export const App = () => {
           <section className="status-card">
             <strong>Status</strong>
             <p>{statusMessage}</p>
-            {loadingGame && <p className="muted">Loading active game...</p>}
           </section>
         </div>
       </div>

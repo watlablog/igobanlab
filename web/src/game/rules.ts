@@ -15,6 +15,9 @@ const opponentOf = (player: Player): Player => (player === "B" ? "W" : "B");
 const cloneMoves = (moves: Move[]): Move[] => moves.map((move) => ({ ...move }));
 
 const snapshotOf = (state: GameState): GameSnapshot => ({
+  boardSize: state.boardSize,
+  komi: state.komi,
+  handicap: state.handicap,
   toPlay: state.toPlay,
   grid: state.grid.slice(),
   captures: { ...state.captures },
@@ -91,6 +94,8 @@ const applyStateTransition = (
   nextMove: Move
 ): GameState => ({
   boardSize: state.boardSize,
+  komi: state.komi,
+  handicap: state.handicap,
   toPlay: opponentOf(state.toPlay),
   grid: nextGrid,
   captures: nextCaptures,
@@ -179,6 +184,8 @@ export const undo = (state: GameState): GameState => {
 
   return {
     boardSize: state.boardSize,
+    komi: previous.komi,
+    handicap: previous.handicap,
     toPlay: previous.toPlay,
     grid: previous.grid.slice(),
     captures: { ...previous.captures },
@@ -200,6 +207,8 @@ export const redo = (state: GameState): GameState => {
 
   return {
     boardSize: state.boardSize,
+    komi: restored.komi,
+    handicap: restored.handicap,
     toPlay: restored.toPlay,
     grid: restored.grid.slice(),
     captures: { ...restored.captures },
@@ -213,6 +222,8 @@ export const redo = (state: GameState): GameState => {
 export const replayMoves = (boardSize: number, moves: Move[]): GameState => {
   let state: GameState = {
     boardSize,
+    komi: 6.5,
+    handicap: 0,
     toPlay: "B",
     grid: new Int8Array(boardSize * boardSize),
     captures: { B: 0, W: 0 },

@@ -63,8 +63,8 @@ export const GobanView = ({ state, disabled = false, onPlay }: GobanViewProps) =
   }, [disabled, markerMap, onPlay, signMap]);
 
   return (
-    <section className="goban-card">
+    <div className="goban-view">
       <div ref={containerRef} />
-    </section>
+    </div>
   );
 };

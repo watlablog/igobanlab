@@ -16,7 +16,16 @@ export type Captures = {
   W: number;
 };
 
+export type GameSetup = {
+  boardSize: number;
+  komi: number;
+  handicap: number;
+};
+
 export type GameSnapshot = {
+  boardSize: number;
+  komi: number;
+  handicap: number;
   toPlay: Player;
   grid: Int8Array;
   captures: Captures;
@@ -26,6 +35,8 @@ export type GameSnapshot = {
 
 export type GameState = {
   boardSize: number;
+  komi: number;
+  handicap: number;
   toPlay: Player;
   grid: Int8Array;
   captures: Captures;
