@@ -22,11 +22,9 @@ import {
   type SetupDraft
 } from "./setupLogic";
 import {
-  initialSidebarOpen,
   isCompactLayout,
   resolveLayoutPreset,
-  type LayoutPreset,
-  type SidebarOpenState
+  type LayoutPreset
 } from "./layout";
 
 type AppScreen = "login" | "menu" | "setup" | "board";
@@ -39,8 +37,6 @@ type GameInfo = {
   whiteRank: string;
   location: string;
 };
-
-type SidebarSection = keyof SidebarOpenState;
 
 const SAVE_DEBOUNCE_MS = 300;
 
@@ -88,9 +84,6 @@ export const App = () => {
   const [moveNotes, setMoveNotes] = useState<Record<number, string>>({});
   const [reviewPly, setReviewPly] = useState(0);
   const [isNoteExpanded, setIsNoteExpanded] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState<SidebarOpenState>(() =>
-    initialSidebarOpen(initialPreset)
-  );
   const moveCountRef = useRef(0);
 
   useEffect(() => {
@@ -124,10 +117,6 @@ export const App = () => {
       window.removeEventListener("resize", handleResize);
     };
   }, []);
-
-  useEffect(() => {
-    setSidebarOpen(initialSidebarOpen(layoutPreset));
-  }, [layoutPreset]);
 
   useEffect(() => {
     if (!isFirebaseConfigured || !user || screen !== "board") {
@@ -265,12 +254,11 @@ export const App = () => {
     setMoveNotes({});
     setReviewPly(0);
     setIsNoteExpanded(false);
-    setSidebarOpen(initialSidebarOpen(layoutPreset));
     moveCountRef.current = 0;
     dispatch({ type: "LOAD", state: createStateFromSetup(normalizedSetup) });
     setStatusMessage("盤面を開始しました。");
     setScreen("board");
-  }, [evenKomiMemory, layoutPreset, setupDraft]);
+  }, [evenKomiMemory, setupDraft]);
 
   const clearBoardSession = useCallback(() => {
     setActiveSetup(DEFAULT_SETUP);
@@ -281,11 +269,10 @@ export const App = () => {
     setMoveNotes({});
     setReviewPly(0);
     setIsNoteExpanded(false);
-    setSidebarOpen(initialSidebarOpen(layoutPreset));
     moveCountRef.current = 0;
     dispatch({ type: "LOAD", state: createStateFromSetup(DEFAULT_SETUP) });
     setStatusMessage("準備完了");
-  }, [layoutPreset]);
+  }, []);
 
   const backToMenuFromBoard = useCallback(() => {
     clearBoardSession();
@@ -303,10 +290,6 @@ export const App = () => {
       : currentMoveNote.trim().length > 0
         ? currentMoveNote
         : "この手のメモは未入力です";
-
-  const toggleSidebarSection = useCallback((section: SidebarSection) => {
-    setSidebarOpen((prev) => ({ ...prev, [section]: !prev[section] }));
-  }, []);
 
   const stepBackward = useCallback(() => {
     setReviewPly((prev) => Math.max(0, prev - 1));
@@ -470,6 +453,11 @@ export const App = () => {
         <div className="board-panel">
           <section className="goban-card board-frame">
             <div className="board-frame-top">
+              <div className="board-inline-state" aria-label="局面状態">
+                <span className="board-state-chip">手番: {displayState.toPlay === "B" ? "黒" : "白"}</span>
+                <span className="board-state-chip">黒アゲハマ: {displayState.captures.B}</span>
+                <span className="board-state-chip">白アゲハマ: {displayState.captures.W}</span>
+              </div>
               <span className="ply-badge">
                 {reviewPly} / {state.moves.length}手
               </span>
@@ -543,18 +531,10 @@ export const App = () => {
         </div>
 
         <div className="sidebar">
-          <section className={`accordion ${sidebarOpen.info ? "open" : ""}`}>
-            <button
-              type="button"
-              className="accordion-header"
-              onClick={() => toggleSidebarSection("info")}
-              aria-expanded={sidebarOpen.info}
-            >
-              <strong>対局情報</strong>
-              <span>{sidebarOpen.info ? "閉じる" : "開く"}</span>
-            </button>
+          <section className="status-card panel-card info-card">
+            <h2 className="panel-title">対局情報</h2>
 
-            <div className="accordion-body">
+            <div className="panel-scroll">
               <label className="form-row compact">
                 <span>対局日</span>
                 <input
@@ -614,50 +594,20 @@ export const App = () => {
                 />
               </label>
             </div>
+
+            <p className="panel-status">{statusMessage}</p>
           </section>
 
-          <section className={`accordion ${sidebarOpen.controls ? "open" : ""}`}>
-            <button
-              type="button"
-              className="accordion-header"
-              onClick={() => toggleSidebarSection("controls")}
-              aria-expanded={sidebarOpen.controls}
-            >
-              <strong>操作</strong>
-              <span>{sidebarOpen.controls ? "閉じる" : "開く"}</span>
-            </button>
-
-            <div className="accordion-body">
-              <Controls
-                toPlay={displayState.toPlay}
-                captures={displayState.captures}
-                canUndo={state.history.length > 0}
-                canRedo={state.future.length > 0}
-                disabled={interactionDisabled}
-                onPass={handlePass}
-                onUndo={handleUndo}
-                onRedo={handleRedo}
-                onNewGame={handleNewGame}
-                onExportSgf={handleExportSgf}
-              />
-            </div>
-          </section>
-
-          <section className={`accordion ${sidebarOpen.status ? "open" : ""}`}>
-            <button
-              type="button"
-              className="accordion-header"
-              onClick={() => toggleSidebarSection("status")}
-              aria-expanded={sidebarOpen.status}
-            >
-              <strong>Status</strong>
-              <span>{sidebarOpen.status ? "閉じる" : "開く"}</span>
-            </button>
-
-            <div className="accordion-body">
-              <p>{statusMessage}</p>
-            </div>
-          </section>
+          <Controls
+            canUndo={state.history.length > 0}
+            canRedo={state.future.length > 0}
+            disabled={interactionDisabled}
+            onPass={handlePass}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
+            onNewGame={handleNewGame}
+            onExportSgf={handleExportSgf}
+          />
         </div>
       </div>
     </main>

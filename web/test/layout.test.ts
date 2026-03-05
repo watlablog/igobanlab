@@ -42,6 +42,6 @@ describe("layout", () => {
 
     expect(large).toBeGreaterThan(small);
     expect(large).toBeLessThanOrEqual(34);
-    expect(small).toBeGreaterThanOrEqual(14);
+    expect(small).toBeGreaterThanOrEqual(10);
   });
 });

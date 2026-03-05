@@ -38,6 +38,12 @@ button.primary {
   border-color: #264653;
 }
 
+button.subtle {
+  border-color: #cfc6b6;
+  color: #5f5648;
+  background: #f6f3ee;
+}
+
 .app-shell {
   max-width: 1200px;
   margin: 0 auto;
@@ -57,10 +63,10 @@ button.primary {
 .status-card,
 .goban-card,
 .screen-card {
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid #d7cfbf;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #ddd5c7;
   border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(56, 45, 18, 0.08);
+  box-shadow: 0 4px 14px rgba(56, 45, 18, 0.05);
 }
 
 .header-card {
@@ -135,8 +141,32 @@ button.primary {
 
 .board-frame-top {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
   min-height: 0;
+}
+
+.board-inline-state {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: nowrap;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.board-state-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.45rem;
+  border: 1px solid #d8cebb;
+  border-radius: 999px;
+  background: #f5f0e5;
+  color: #5b4b35;
+  font-size: 0.8rem;
+  line-height: 1.2;
 }
 
 .ply-badge {
@@ -181,16 +211,45 @@ button.primary {
 }
 
 .sidebar {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: 0.6rem;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .controls-card,
 .status-card {
   padding: 1rem;
+}
+
+.panel-card {
+  padding: 0.7rem;
+}
+
+.panel-title {
+  margin: 0 0 0.45rem;
+  font-size: 0.92rem;
+  line-height: 1.2;
+}
+
+.info-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.panel-scroll {
+  min-height: 0;
+  overflow: auto;
+}
+
+.panel-status {
+  margin: 0.5rem 0 0;
+  padding-top: 0.35rem;
+  border-top: 1px solid #e7e0d3;
+  font-size: 0.8rem;
+  color: #6c6c6c;
 }
 
 .row {
@@ -205,6 +264,32 @@ button.primary {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.5rem;
+}
+
+.controls-grid .full {
+  grid-column: 1 / -1;
+}
+
+.state-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.4rem;
+}
+
+.state-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0.45rem;
+  background: #f9f6ef;
+  border: 1px solid #e5dccd;
+  border-radius: 8px;
+}
+
+.state-label {
+  color: #746954;
+  font-size: 0.82rem;
 }
 
 .setup-card {
@@ -302,55 +387,6 @@ button.primary {
   gap: 0.5rem;
 }
 
-.accordion {
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid #d7cfbf;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(56, 45, 18, 0.08);
-  overflow: hidden;
-  flex: 0 0 auto;
-}
-
-.accordion-header {
-  width: 100%;
-  border: 0;
-  border-radius: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #f6f1e8;
-  padding: 0.6rem 0.75rem;
-}
-
-.accordion-header > span {
-  color: #6f6f6f;
-  font-size: 0.82rem;
-}
-
-.accordion-body {
-  max-height: 0;
-  overflow: hidden;
-  padding: 0 0.75rem;
-  transition: max-height 180ms ease, padding 180ms ease;
-}
-
-.accordion.open .accordion-body {
-  max-height: 560px;
-  padding: 0.65rem 0.75rem 0.75rem;
-}
-
-.accordion-body .controls-card,
-.accordion-body .status-card {
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-  padding: 0;
-}
-
-.accordion-body p {
-  margin: 0;
-}
-
 .app-shell.board-screen {
   height: 100dvh;
   max-height: 100dvh;
@@ -382,15 +418,65 @@ button.primary {
   min-height: 0;
   overflow: hidden;
   gap: 0.6rem;
-  grid-template-columns: minmax(0, 1fr) 280px;
+  grid-template-columns: minmax(0, 1fr) 300px;
 }
 
 .board-screen.layout-tablet .workspace {
-  grid-template-columns: minmax(0, 1fr) 240px;
+  grid-template-columns: minmax(0, 1fr) 260px;
 }
 
 .board-screen.layout-mobile .workspace {
   grid-template-columns: 1fr;
+}
+
+.board-screen.layout-mobile {
+  height: auto;
+  max-height: none;
+  min-height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.board-screen.layout-mobile .workspace {
+  flex: 0 0 auto;
+  overflow: visible;
+  gap: 0.5rem;
+}
+
+.board-screen.layout-mobile .board-panel,
+.board-screen.layout-mobile .goban-card,
+.board-screen.layout-mobile .board-frame {
+  min-height: 0;
+  height: auto;
+}
+
+.board-screen.layout-mobile .board-frame {
+  grid-template-rows: auto auto auto auto auto;
+}
+
+.board-screen.layout-mobile .board-surface {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  max-height: min(74vh, 92vw);
+}
+
+.board-screen.layout-mobile .goban-view,
+.board-screen.layout-mobile .goban-mount {
+  min-height: 0;
+  height: 100%;
+}
+
+.board-screen.layout-mobile .sidebar {
+  grid-template-rows: none;
+  overflow: visible;
+}
+
+.board-screen.layout-mobile .panel-scroll {
+  max-height: 34vh;
+}
+
+.board-screen.layout-mobile .note-input {
+  max-height: 28vh;
 }
 
 .board-screen .board-panel,
@@ -405,21 +491,16 @@ button.primary {
   padding: 0.6rem;
 }
 
+.board-screen .sidebar {
+  gap: 0.55rem;
+}
+
 .board-screen .move-nav-actions button {
   padding: 0.45rem 0.3rem;
 }
 
 .board-screen.layout-tablet .header-card {
   padding: 0.4rem 0.6rem;
-}
-
-.board-screen.layout-tablet .accordion-header {
-  padding: 0.5rem 0.65rem;
-}
-
-.board-screen.layout-tablet .accordion.open .accordion-body {
-  max-height: 440px;
-  padding: 0.55rem 0.65rem 0.65rem;
 }
 
 .board-screen.layout-tablet .move-nav-actions {
@@ -446,6 +527,10 @@ button.primary {
 @media (max-width: 980px) {
   .workspace {
     grid-template-columns: 1fr;
+  }
+
+  .board-screen.layout-tablet .workspace {
+    grid-template-columns: minmax(0, 1fr) 260px;
   }
 
   .button-grid {

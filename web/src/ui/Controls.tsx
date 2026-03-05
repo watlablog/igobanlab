@@ -1,8 +1,4 @@
-import type { Captures, Player } from "../types/models";
-
 type ControlsProps = {
-  toPlay: Player;
-  captures: Captures;
   canUndo: boolean;
   canRedo: boolean;
   disabled: boolean;
@@ -14,8 +10,6 @@ type ControlsProps = {
 };
 
 export const Controls = ({
-  toPlay,
-  captures,
   canUndo,
   canRedo,
   disabled,
@@ -25,19 +19,11 @@ export const Controls = ({
   onNewGame,
   onExportSgf
 }: ControlsProps) => (
-  <section className="controls-card">
-    <div className="row">
-      <strong>Turn:</strong> <span>{toPlay === "B" ? "Black" : "White"}</span>
-    </div>
+  <section className="controls-card panel-card action-card">
+    <h2 className="panel-title">操作</h2>
 
-    <div className="row">
-      <strong>Captures:</strong>
-      <span>Black {captures.B}</span>
-      <span>White {captures.W}</span>
-    </div>
-
-    <div className="button-grid">
-      <button type="button" onClick={onPass} disabled={disabled}>
+    <div className="button-grid controls-grid">
+      <button type="button" className="subtle" onClick={onPass} disabled={disabled}>
         Pass
       </button>
       <button type="button" onClick={onUndo} disabled={disabled || !canUndo}>
@@ -46,10 +32,10 @@ export const Controls = ({
       <button type="button" onClick={onRedo} disabled={disabled || !canRedo}>
         Redo
       </button>
-      <button type="button" onClick={onNewGame} disabled={disabled}>
+      <button type="button" className="primary" onClick={onNewGame} disabled={disabled}>
         New Game
       </button>
-      <button type="button" onClick={onExportSgf} disabled={disabled}>
+      <button type="button" className="subtle full" onClick={onExportSgf} disabled={disabled}>
         Export SGF
       </button>
     </div>

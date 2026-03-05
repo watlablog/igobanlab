@@ -15,6 +15,8 @@ type VertexSizeInput = {
 
 const MIN_DESKTOP_WIDTH = 1200;
 const MIN_TABLET_WIDTH = 768;
+const MIN_VERTEX_SIZE = 10;
+const MAX_VERTEX_SIZE = 34;
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
@@ -61,5 +63,5 @@ export const computeVertexSize = ({
   const available = Math.max(0, Math.min(width, height));
   const paddingFactor = showCoordinates ? 3.0 : 1.8;
   const raw = Math.floor(available / (normalizedBoardSize + paddingFactor));
-  return clamp(raw, 14, 34);
+  return clamp(raw, MIN_VERTEX_SIZE, MAX_VERTEX_SIZE);
 };
