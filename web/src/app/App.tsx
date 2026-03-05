@@ -8,16 +8,28 @@ import { saveActiveGame } from "../firebase/db";
 import { signInWithGoogle, subscribeAuth } from "../firebase/auth";
 import { isFirebaseConfigured } from "../firebase/firebase";
 import type { GameSetup } from "../types/models";
+import {
+  BOARD_SIZE_OPTIONS,
+  DEFAULT_HANDICAP_SELECTION,
+  HANDICAP_SELECTION_OPTIONS,
+  applyHandicapChange,
+  applyKomiChange,
+  handicapSummaryLabel,
+  isHandicapSelection,
+  normalizeBoardSize,
+  setupFromDraft,
+  type HandicapSelection,
+  type SetupDraft
+} from "./setupLogic";
+import {
+  initialSidebarOpen,
+  isCompactLayout,
+  resolveLayoutPreset,
+  type LayoutPreset,
+  type SidebarOpenState
+} from "./layout";
 
 type AppScreen = "login" | "menu" | "setup" | "board";
-
-type HandicapSelection = "even" | "teisen" | "h2" | "h3" | "h4" | "h5" | "h6" | "h7" | "h8" | "h9";
-
-type SetupDraft = {
-  boardSize: number;
-  komi: number;
-  handicapSelection: HandicapSelection;
-};
 
 type GameInfo = {
   gameDate: string;
@@ -28,22 +40,9 @@ type GameInfo = {
   location: string;
 };
 
-const SAVE_DEBOUNCE_MS = 300;
-const BOARD_SIZE_OPTIONS = [9, 13, 19] as const;
-const DEFAULT_HANDICAP_SELECTION: HandicapSelection = "even";
+type SidebarSection = keyof SidebarOpenState;
 
-const HANDICAP_SELECTION_OPTIONS: Array<{ value: HandicapSelection; label: string }> = [
-  { value: "even", label: "互先" },
-  { value: "teisen", label: "定先" },
-  { value: "h2", label: "置き石 2子" },
-  { value: "h3", label: "置き石 3子" },
-  { value: "h4", label: "置き石 4子" },
-  { value: "h5", label: "置き石 5子" },
-  { value: "h6", label: "置き石 6子" },
-  { value: "h7", label: "置き石 7子" },
-  { value: "h8", label: "置き石 8子" },
-  { value: "h9", label: "置き石 9子" }
-];
+const SAVE_DEBOUNCE_MS = 300;
 
 const DEFAULT_SETUP_DRAFT: SetupDraft = {
   boardSize: 19,
@@ -66,42 +65,17 @@ const DEFAULT_GAME_INFO: GameInfo = {
   location: ""
 };
 
-const isHandicapSelection = (value: string): value is HandicapSelection =>
-  HANDICAP_SELECTION_OPTIONS.some((option) => option.value === value);
-
-const normalizeBoardSize = (value: number): number =>
-  BOARD_SIZE_OPTIONS.includes(value as (typeof BOARD_SIZE_OPTIONS)[number]) ? value : 19;
-
-const normalizeKomi = (value: number, fallback: number): number => {
-  if (!Number.isFinite(value)) return fallback;
-  return Math.round(value * 2) / 2;
-};
-
-const selectionToHandicap = (selection: HandicapSelection): number => {
-  if (!selection.startsWith("h")) {
-    return 0;
-  }
-  return Number(selection.slice(1));
-};
-
-const setupFromDraft = (draft: SetupDraft, fallbackEvenKomi: number): GameSetup => {
-  const boardSize = normalizeBoardSize(draft.boardSize);
-  const fallbackKomi = draft.handicapSelection === "even" ? fallbackEvenKomi : 0;
-  const komi = normalizeKomi(draft.komi, fallbackKomi);
-  const handicap = selectionToHandicap(draft.handicapSelection);
-  return { boardSize, komi, handicap };
-};
-
-const handicapSummaryLabel = (selection: HandicapSelection): string => {
-  const option = HANDICAP_SELECTION_OPTIONS.find((candidate) => candidate.value === selection);
-  return option ? option.label : "互先";
-};
-
 export const App = () => {
+  const initialPreset =
+    typeof window === "undefined"
+      ? "desktop"
+      : resolveLayoutPreset(window.innerWidth, window.innerHeight);
+
   const [state, dispatch] = useReducer(gameReducer, undefined, () => createStateFromSetup(DEFAULT_SETUP));
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [screen, setScreen] = useState<AppScreen>("login");
+  const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>(initialPreset);
 
   const [activeSetup, setActiveSetup] = useState<GameSetup>(DEFAULT_SETUP);
   const [activeHandicapSelection, setActiveHandicapSelection] =
@@ -113,6 +87,10 @@ export const App = () => {
   const [gameInfo, setGameInfo] = useState<GameInfo>(DEFAULT_GAME_INFO);
   const [moveNotes, setMoveNotes] = useState<Record<number, string>>({});
   const [reviewPly, setReviewPly] = useState(0);
+  const [isNoteExpanded, setIsNoteExpanded] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState<SidebarOpenState>(() =>
+    initialSidebarOpen(initialPreset)
+  );
   const moveCountRef = useRef(0);
 
   useEffect(() => {
@@ -130,6 +108,26 @@ export const App = () => {
 
     return unsubscribe;
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handleResize = () => {
+      setLayoutPreset(resolveLayoutPreset(window.innerWidth, window.innerHeight));
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
+
+  useEffect(() => {
+    setSidebarOpen(initialSidebarOpen(layoutPreset));
+  }, [layoutPreset]);
 
   useEffect(() => {
     if (!isFirebaseConfigured || !user || screen !== "board") {
@@ -168,6 +166,9 @@ export const App = () => {
 
   const isReviewingPast = reviewPly < state.moves.length;
   const interactionDisabled = !playEnabled || isReviewingPast;
+  const compactLayout = isCompactLayout(layoutPreset);
+  const showCoordinates = layoutPreset === "desktop";
+  const noteTitle = reviewPly === 0 ? "開始局面メモ" : `${reviewPly}手目メモ`;
 
   const displayState = useMemo(() => {
     if (reviewPly === state.moves.length) {
@@ -263,11 +264,13 @@ export const App = () => {
     setActiveHandicapSelection(normalizedSelection);
     setMoveNotes({});
     setReviewPly(0);
+    setIsNoteExpanded(false);
+    setSidebarOpen(initialSidebarOpen(layoutPreset));
     moveCountRef.current = 0;
     dispatch({ type: "LOAD", state: createStateFromSetup(normalizedSetup) });
     setStatusMessage("盤面を開始しました。");
     setScreen("board");
-  }, [evenKomiMemory, setupDraft]);
+  }, [evenKomiMemory, layoutPreset, setupDraft]);
 
   const clearBoardSession = useCallback(() => {
     setActiveSetup(DEFAULT_SETUP);
@@ -277,10 +280,12 @@ export const App = () => {
     setGameInfo(DEFAULT_GAME_INFO);
     setMoveNotes({});
     setReviewPly(0);
+    setIsNoteExpanded(false);
+    setSidebarOpen(initialSidebarOpen(layoutPreset));
     moveCountRef.current = 0;
     dispatch({ type: "LOAD", state: createStateFromSetup(DEFAULT_SETUP) });
     setStatusMessage("準備完了");
-  }, []);
+  }, [layoutPreset]);
 
   const backToMenuFromBoard = useCallback(() => {
     clearBoardSession();
@@ -292,6 +297,16 @@ export const App = () => {
   }, []);
 
   const currentMoveNote = reviewPly > 0 ? moveNotes[reviewPly] ?? "" : "";
+  const notePreview =
+    reviewPly === 0
+      ? "1手目以降でメモできます"
+      : currentMoveNote.trim().length > 0
+        ? currentMoveNote
+        : "この手のメモは未入力です";
+
+  const toggleSidebarSection = useCallback((section: SidebarSection) => {
+    setSidebarOpen((prev) => ({ ...prev, [section]: !prev[section] }));
+  }, []);
 
   const stepBackward = useCallback(() => {
     setReviewPly((prev) => Math.max(0, prev - 1));
@@ -311,38 +326,22 @@ export const App = () => {
 
   const handleKomiChange = useCallback((value: number) => {
     setSetupDraft((prev) => {
-      const next = { ...prev, komi: value };
-      if (prev.handicapSelection === "even") {
-        setEvenKomiMemory(value);
+      const result = applyKomiChange(prev, value, evenKomiMemory);
+      if (result.evenKomiMemory !== evenKomiMemory) {
+        setEvenKomiMemory(result.evenKomiMemory);
       }
-      return next;
+      return result.draft;
     });
-  }, []);
+  }, [evenKomiMemory]);
 
   const handleHandicapChange = useCallback(
     (selection: HandicapSelection) => {
       setSetupDraft((prev) => {
-        if (prev.handicapSelection === selection) {
-          return prev;
+        const result = applyHandicapChange(prev, selection, evenKomiMemory);
+        if (result.evenKomiMemory !== evenKomiMemory) {
+          setEvenKomiMemory(result.evenKomiMemory);
         }
-
-        if (prev.handicapSelection === "even" && selection !== "even") {
-          setEvenKomiMemory(prev.komi);
-        }
-
-        if (selection === "even") {
-          return {
-            ...prev,
-            handicapSelection: selection,
-            komi: evenKomiMemory
-          };
-        }
-
-        return {
-          ...prev,
-          handicapSelection: selection,
-          komi: 0
-        };
+        return result.draft;
       });
     },
     [evenKomiMemory]
@@ -457,14 +456,11 @@ export const App = () => {
   }
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell board-screen layout-${layoutPreset}`}>
       <header className="header-card">
-        <div>
-          <h1>棋譜並べ</h1>
-          <p className="muted">
-            {activeSetup.boardSize}路盤 / コミ {activeSetup.komi} / ハンディキャップ {handicapSummaryLabel(activeHandicapSelection)}
-          </p>
-        </div>
+        <p className="muted header-summary">
+          {activeSetup.boardSize}路盤 / コミ {activeSetup.komi} / ハンディキャップ {handicapSummaryLabel(activeHandicapSelection)}
+        </p>
         <button type="button" onClick={backToMenuFromBoard}>
           戻る
         </button>
@@ -479,7 +475,15 @@ export const App = () => {
               </span>
             </div>
 
-            <GobanView state={displayState} disabled={interactionDisabled} onPlay={handlePlay} />
+            <div className="board-surface">
+              <GobanView
+                state={displayState}
+                disabled={interactionDisabled}
+                onPlay={handlePlay}
+                compact={compactLayout}
+                showCoordinates={showCoordinates}
+              />
+            </div>
 
             <div className="move-nav-actions">
               <button type="button" onClick={stepBackward10} disabled={reviewPly === 0} aria-label="10手戻る">
@@ -506,19 +510,31 @@ export const App = () => {
               </button>
             </div>
 
-            <label className="form-row compact">
-              <span>{reviewPly === 0 ? "開始局面メモ" : `${reviewPly}手目メモ`}</span>
-              <textarea
-                className="note-input"
-                value={currentMoveNote}
-                onChange={(event) => {
-                  if (reviewPly === 0) return;
-                  setMoveNotes((prev) => ({ ...prev, [reviewPly]: event.target.value }));
-                }}
-                placeholder={reviewPly === 0 ? "1手目以降でメモできます" : `${reviewPly}手目のメモ`}
-                disabled={reviewPly === 0}
-              />
-            </label>
+            <section className={`note-shell ${isNoteExpanded ? "expanded" : "collapsed"}`}>
+              <button
+                type="button"
+                className="note-toggle"
+                onClick={() => setIsNoteExpanded((prev) => !prev)}
+                aria-expanded={isNoteExpanded}
+              >
+                {noteTitle}
+              </button>
+
+              {isNoteExpanded ? (
+                <textarea
+                  className="note-input"
+                  value={currentMoveNote}
+                  onChange={(event) => {
+                    if (reviewPly === 0) return;
+                    setMoveNotes((prev) => ({ ...prev, [reviewPly]: event.target.value }));
+                  }}
+                  placeholder={reviewPly === 0 ? "1手目以降でメモできます" : `${reviewPly}手目のメモ`}
+                  disabled={reviewPly === 0}
+                />
+              ) : (
+                <p className="note-preview">{notePreview}</p>
+              )}
+            </section>
 
             {isReviewingPast && (
               <p className="muted">過去局面の確認中です。着手するには最後の手まで進めてください。</p>
@@ -527,85 +543,120 @@ export const App = () => {
         </div>
 
         <div className="sidebar">
-          <section className="status-card">
-            <strong>対局情報</strong>
+          <section className={`accordion ${sidebarOpen.info ? "open" : ""}`}>
+            <button
+              type="button"
+              className="accordion-header"
+              onClick={() => toggleSidebarSection("info")}
+              aria-expanded={sidebarOpen.info}
+            >
+              <strong>対局情報</strong>
+              <span>{sidebarOpen.info ? "閉じる" : "開く"}</span>
+            </button>
 
-            <label className="form-row compact">
-              <span>対局日</span>
-              <input
-                type="date"
-                value={gameInfo.gameDate}
-                onChange={(event) => updateInfoField("gameDate", event.target.value)}
-              />
-            </label>
+            <div className="accordion-body">
+              <label className="form-row compact">
+                <span>対局日</span>
+                <input
+                  type="date"
+                  value={gameInfo.gameDate}
+                  onChange={(event) => updateInfoField("gameDate", event.target.value)}
+                />
+              </label>
 
-            <label className="form-row compact">
-              <span>黒番 対局者</span>
-              <input
-                type="text"
-                value={gameInfo.blackName}
-                onChange={(event) => updateInfoField("blackName", event.target.value)}
-                placeholder="例: 黒 太郎"
-              />
-            </label>
+              <label className="form-row compact">
+                <span>黒番 対局者</span>
+                <input
+                  type="text"
+                  value={gameInfo.blackName}
+                  onChange={(event) => updateInfoField("blackName", event.target.value)}
+                  placeholder="例: 黒 太郎"
+                />
+              </label>
 
-            <label className="form-row compact">
-              <span>黒番 段級位</span>
-              <input
-                type="text"
-                value={gameInfo.blackRank}
-                onChange={(event) => updateInfoField("blackRank", event.target.value)}
-                placeholder="例: 3段"
-              />
-            </label>
+              <label className="form-row compact">
+                <span>黒番 段級位</span>
+                <input
+                  type="text"
+                  value={gameInfo.blackRank}
+                  onChange={(event) => updateInfoField("blackRank", event.target.value)}
+                  placeholder="例: 3段"
+                />
+              </label>
 
-            <label className="form-row compact">
-              <span>白番 対局者</span>
-              <input
-                type="text"
-                value={gameInfo.whiteName}
-                onChange={(event) => updateInfoField("whiteName", event.target.value)}
-                placeholder="例: 白 花子"
-              />
-            </label>
+              <label className="form-row compact">
+                <span>白番 対局者</span>
+                <input
+                  type="text"
+                  value={gameInfo.whiteName}
+                  onChange={(event) => updateInfoField("whiteName", event.target.value)}
+                  placeholder="例: 白 花子"
+                />
+              </label>
 
-            <label className="form-row compact">
-              <span>白番 段級位</span>
-              <input
-                type="text"
-                value={gameInfo.whiteRank}
-                onChange={(event) => updateInfoField("whiteRank", event.target.value)}
-                placeholder="例: 2段"
-              />
-            </label>
+              <label className="form-row compact">
+                <span>白番 段級位</span>
+                <input
+                  type="text"
+                  value={gameInfo.whiteRank}
+                  onChange={(event) => updateInfoField("whiteRank", event.target.value)}
+                  placeholder="例: 2段"
+                />
+              </label>
 
-            <label className="form-row compact">
-              <span>対局場所</span>
-              <input
-                type="text"
-                value={gameInfo.location}
-                onChange={(event) => updateInfoField("location", event.target.value)}
-                placeholder="例: 自宅 / 碁会所"
-              />
-            </label>
+              <label className="form-row compact">
+                <span>対局場所</span>
+                <input
+                  type="text"
+                  value={gameInfo.location}
+                  onChange={(event) => updateInfoField("location", event.target.value)}
+                  placeholder="例: 自宅 / 碁会所"
+                />
+              </label>
+            </div>
           </section>
 
-          <Controls
-            toPlay={displayState.toPlay}
-            captures={displayState.captures}
-            canUndo={state.history.length > 0}
-            canRedo={state.future.length > 0}
-            disabled={interactionDisabled}
-            onPass={handlePass}
-            onUndo={handleUndo}
-            onRedo={handleRedo}
-            onNewGame={handleNewGame}
-            onExportSgf={handleExportSgf}
-          />
+          <section className={`accordion ${sidebarOpen.controls ? "open" : ""}`}>
+            <button
+              type="button"
+              className="accordion-header"
+              onClick={() => toggleSidebarSection("controls")}
+              aria-expanded={sidebarOpen.controls}
+            >
+              <strong>操作</strong>
+              <span>{sidebarOpen.controls ? "閉じる" : "開く"}</span>
+            </button>
 
-          <section className="status-card">
-            <strong>Status</strong>
-            <p>{statusMessage}</p>
+            <div className="accordion-body">
+              <Controls
+                toPlay={displayState.toPlay}
+                captures={displayState.captures}
+                canUndo={state.history.length > 0}
+                canRedo={state.future.length > 0}
+                disabled={interactionDisabled}
+                onPass={handlePass}
+                onUndo={handleUndo}
+                onRedo={handleRedo}
+                onNewGame={handleNewGame}
+                onExportSgf={handleExportSgf}
+              />
+            </div>
+          </section>
+
+          <section className={`accordion ${sidebarOpen.status ? "open" : ""}`}>
+            <button
+              type="button"
+              className="accordion-header"
+              onClick={() => toggleSidebarSection("status")}
+              aria-expanded={sidebarOpen.status}
+            >
+              <strong>Status</strong>
+              <span>{sidebarOpen.status ? "閉じる" : "開く"}</span>
+            </button>
+
+            <div className="accordion-body">
+              <p>{statusMessage}</p>
+            </div>
           </section>
         </div>
       </div>

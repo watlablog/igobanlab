@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { h, render } from "preact";
 import { Goban, type Map as ShudanMap, type Marker } from "@sabaki/shudan";
 import type { GameState } from "../types/models";
+import { computeVertexSize } from "../app/layout";
 
 type GobanViewProps = {
   state: GameState;
   disabled?: boolean;
+  compact?: boolean;
+  showCoordinates?: boolean;
   onPlay: (x: number, y: number) => void;
 };
 
@@ -18,8 +21,16 @@ const convertSign = (value: number): 0 | 1 | -1 => {
 const createEmptyMarkerMap = (boardSize: number): ShudanMap<Marker | null> =>
   Array.from({ length: boardSize }, () => Array.from({ length: boardSize }, () => null));
 
-export const GobanView = ({ state, disabled = false, onPlay }: GobanViewProps) => {
-  const containerRef = useRef<HTMLDivElement | null>(null);
+export const GobanView = ({
+  state,
+  disabled = false,
+  compact = false,
+  showCoordinates = true,
+  onPlay
+}: GobanViewProps) => {
+  const shellRef = useRef<HTMLDivElement | null>(null);
+  const mountRef = useRef<HTMLDivElement | null>(null);
+  const [vertexSize, setVertexSize] = useState(30);
 
   const signMap = useMemo<ShudanMap<0 | 1 | -1>>(() => {
     return Array.from({ length: state.boardSize }, (_, y) =>
@@ -36,16 +47,41 @@ export const GobanView = ({ state, disabled = false, onPlay }: GobanViewProps) =
   }, [state.boardSize, state.lastMove]);
 
   useEffect(() => {
-    const container = containerRef.current;
-    if (!container) {
+    const shell = shellRef.current;
+    if (!shell || typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+
+      const nextSize = computeVertexSize({
+        containerWidth: entry.contentRect.width,
+        containerHeight: entry.contentRect.height,
+        boardSize: state.boardSize,
+        showCoordinates
+      });
+      setVertexSize((prev) => (prev === nextSize ? prev : nextSize));
+    });
+
+    observer.observe(shell);
+    return () => {
+      observer.disconnect();
+    };
+  }, [showCoordinates, state.boardSize]);
+
+  useEffect(() => {
+    const mount = mountRef.current;
+    if (!mount) {
       return;
     }
 
     render(
       h(Goban, {
-        className: "igl-goban",
-        vertexSize: 30,
-        showCoordinates: true,
+        className: `igl-goban ${compact ? "compact" : ""}`,
+        vertexSize,
+        showCoordinates,
         signMap,
         markerMap,
         busy: disabled,
@@ -54,17 +90,17 @@ export const GobanView = ({ state, disabled = false, onPlay }: GobanViewProps) =
           onPlay(x, y);
         }
       }),
-      container
+      mount
     );
 
     return () => {
-      render(null, container);
+      render(null, mount);
     };
-  }, [disabled, markerMap, onPlay, signMap]);
+  }, [compact, disabled, markerMap, onPlay, showCoordinates, signMap, vertexSize]);
 
   return (
-    <div className="goban-view">
-      <div ref={containerRef} />
+    <div className={`goban-view ${compact ? "compact" : ""}`} ref={shellRef}>
+      <div className="goban-mount" ref={mountRef} />
     </div>
   );
 };

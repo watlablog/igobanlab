@@ -108,14 +108,16 @@ button.primary {
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 1fr) 340px;
   gap: 1rem;
+  min-height: 0;
 }
 
 .board-panel {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  min-height: 0;
 }
 
 .goban-card {
@@ -124,14 +126,17 @@ button.primary {
 }
 
 .board-frame {
-  display: flex;
-  flex-direction: column;
-  gap: 0.8rem;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+  gap: 0.6rem;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .board-frame-top {
   display: flex;
   justify-content: flex-end;
+  min-height: 0;
 }
 
 .ply-badge {
@@ -146,21 +151,41 @@ button.primary {
   font-weight: 700;
 }
 
+.board-surface {
+  min-height: 0;
+  overflow: hidden;
+}
+
 .goban-view {
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 640px;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.goban-mount {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .igl-goban {
   max-width: 100%;
+  max-height: 100%;
 }
 
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.6rem;
+  min-height: 0;
+  overflow: auto;
 }
 
 .controls-card,
@@ -206,17 +231,53 @@ button.primary {
   margin-bottom: 0.7rem;
 }
 
+.form-row.compact:last-child {
+  margin-bottom: 0;
+}
+
+.note-shell {
+  border: 1px solid #d2c9b9;
+  border-radius: 10px;
+  background: #f8f4ec;
+  padding: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-height: 0;
+}
+
+.note-toggle {
+  width: 100%;
+  justify-content: space-between;
+  text-align: left;
+  background: #fff;
+}
+
+.note-preview {
+  margin: 0;
+  padding: 0.1rem 0.35rem 0.2rem;
+  color: #5d5d5d;
+  line-height: 1.35;
+}
+
+.note-shell.collapsed .note-preview {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
 .note-input {
   border: 1px solid #c8c1b2;
   border-radius: 8px;
   padding: 0.55rem 0.6rem;
   font: inherit;
-  min-height: 110px;
+  min-height: 72px;
+  max-height: clamp(72px, 14vh, 140px);
+  overflow: auto;
   resize: vertical;
 }
 
 .move-nav-actions {
-  margin-bottom: 0.6rem;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.4rem;
@@ -235,14 +296,138 @@ button.primary {
   background: #fff;
 }
 
-.move-review-card {
-  margin-top: 0;
-}
-
 .setup-actions {
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
+}
+
+.accordion {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #d7cfbf;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(56, 45, 18, 0.08);
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+.accordion-header {
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f6f1e8;
+  padding: 0.6rem 0.75rem;
+}
+
+.accordion-header > span {
+  color: #6f6f6f;
+  font-size: 0.82rem;
+}
+
+.accordion-body {
+  max-height: 0;
+  overflow: hidden;
+  padding: 0 0.75rem;
+  transition: max-height 180ms ease, padding 180ms ease;
+}
+
+.accordion.open .accordion-body {
+  max-height: 560px;
+  padding: 0.65rem 0.75rem 0.75rem;
+}
+
+.accordion-body .controls-card,
+.accordion-body .status-card {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+.accordion-body p {
+  margin: 0;
+}
+
+.app-shell.board-screen {
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  padding: 0.6rem;
+  gap: 0.55rem;
+}
+
+.board-screen .header-card {
+  flex: 0 0 auto;
+  padding: 0.45rem 0.7rem;
+  min-height: 0;
+}
+
+.board-screen .header-card p {
+  margin: 0;
+}
+
+.header-summary {
+  font-size: 0.9rem;
+  line-height: 1.25;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.board-screen .workspace {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  gap: 0.6rem;
+  grid-template-columns: minmax(0, 1fr) 280px;
+}
+
+.board-screen.layout-tablet .workspace {
+  grid-template-columns: minmax(0, 1fr) 240px;
+}
+
+.board-screen.layout-mobile .workspace {
+  grid-template-columns: 1fr;
+}
+
+.board-screen .board-panel,
+.board-screen .sidebar,
+.board-screen .goban-card,
+.board-screen .board-frame {
+  min-height: 0;
+}
+
+.board-screen .goban-card {
+  height: 100%;
+  padding: 0.6rem;
+}
+
+.board-screen .move-nav-actions button {
+  padding: 0.45rem 0.3rem;
+}
+
+.board-screen.layout-tablet .header-card {
+  padding: 0.4rem 0.6rem;
+}
+
+.board-screen.layout-tablet .accordion-header {
+  padding: 0.5rem 0.65rem;
+}
+
+.board-screen.layout-tablet .accordion.open .accordion-body {
+  max-height: 440px;
+  padding: 0.55rem 0.65rem 0.65rem;
+}
+
+.board-screen.layout-tablet .move-nav-actions {
+  gap: 0.3rem;
+}
+
+.board-screen.layout-tablet .move-nav-actions button {
+  font-size: 0.85rem;
 }
 
 .muted {
@@ -261,10 +446,6 @@ button.primary {
 @media (max-width: 980px) {
   .workspace {
     grid-template-columns: 1fr;
-  }
-
-  .goban-view {
-    min-height: 0;
   }
 
   .button-grid {
