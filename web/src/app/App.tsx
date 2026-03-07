@@ -5,7 +5,7 @@ import { GobanView } from "../ui/GobanView";
 import { exportMinimalSgf } from "../game/sgf";
 import { createStateFromSetup, gameReducer, stateFromSnapshot } from "../game/state";
 import { saveActiveGame } from "../firebase/db";
-import { signInWithGoogle, subscribeAuth } from "../firebase/auth";
+import { signInWithGoogle, signOutUser, subscribeAuth } from "../firebase/auth";
 import { isFirebaseConfigured } from "../firebase/firebase";
 import type { GameSetup } from "../types/models";
 import {
@@ -60,6 +60,8 @@ const DEFAULT_GAME_INFO: GameInfo = {
   whiteRank: "",
   location: ""
 };
+
+const CLEAR_CONFIRM_MESSAGE = "現在の対局情報がクリアになりますがよろしいですか？";
 
 export const App = () => {
   const initialPreset =
@@ -274,10 +276,45 @@ export const App = () => {
     setStatusMessage("準備完了");
   }, []);
 
+  const hasGameInfoInput = useMemo(
+    () => Object.values(gameInfo).some((value) => value.trim().length > 0),
+    [gameInfo]
+  );
+  const hasMoveNotesInput = useMemo(
+    () => Object.values(moveNotes).some((value) => value.trim().length > 0),
+    [moveNotes]
+  );
+  const needsClearConfirm = state.moves.length > 0 || hasGameInfoInput || hasMoveNotesInput;
+
+  const confirmBoardClear = useCallback((): boolean => {
+    if (!needsClearConfirm) {
+      return true;
+    }
+    return window.confirm(CLEAR_CONFIRM_MESSAGE);
+  }, [needsClearConfirm]);
+
   const backToMenuFromBoard = useCallback(() => {
+    if (!confirmBoardClear()) {
+      return;
+    }
     clearBoardSession();
     setScreen("menu");
-  }, [clearBoardSession]);
+  }, [clearBoardSession, confirmBoardClear]);
+
+  const handleLogOut = useCallback(async () => {
+    if (screen === "board") {
+      if (!confirmBoardClear()) {
+        return;
+      }
+      clearBoardSession();
+    }
+
+    try {
+      await signOutUser();
+    } catch {
+      setStatusMessage("ログオフに失敗しました。再度お試しください。");
+    }
+  }, [clearBoardSession, confirmBoardClear, screen]);
 
   const updateInfoField = useCallback((key: keyof GameInfo, value: string) => {
     setGameInfo((prev) => ({ ...prev, [key]: value }));
@@ -369,6 +406,9 @@ export const App = () => {
           <button type="button" className="primary large" onClick={openSetup}>
             棋譜並べ
           </button>
+          <button type="button" className="large" onClick={() => void handleLogOut()}>
+            ログオフ
+          </button>
         </section>
       </main>
     );
@@ -444,9 +484,14 @@ export const App = () => {
         <p className="muted header-summary">
           {activeSetup.boardSize}路盤 / コミ {activeSetup.komi} / ハンディキャップ {handicapSummaryLabel(activeHandicapSelection)}
         </p>
-        <button type="button" onClick={backToMenuFromBoard}>
-          戻る
-        </button>
+        <div className="header-actions">
+          <button type="button" onClick={backToMenuFromBoard}>
+            戻る
+          </button>
+          <button type="button" onClick={() => void handleLogOut()}>
+            ログオフ
+          </button>
+        </div>
       </header>
 
       <div className="workspace">

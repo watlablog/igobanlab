@@ -82,6 +82,12 @@ button.subtle {
   margin: 0;
 }
 
+.header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
 .screen-card {
   width: min(560px, 100%);
   margin: 0 auto;
