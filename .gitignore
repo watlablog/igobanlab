@@ -13,3 +13,9 @@ web/.firebase/
 !.env.sample
 web/.env*
 !web/.env.example
+
+# KataGo runtime assets (keep template/readme only)
+api/katago/*
+!api/katago/.gitkeep
+!api/katago/README.md
+api/cloudrun.env

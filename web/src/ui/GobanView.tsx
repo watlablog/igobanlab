@@ -9,6 +9,7 @@ type GobanViewProps = {
   disabled?: boolean;
   compact?: boolean;
   showCoordinates?: boolean;
+  extraMarkerMap?: ShudanMap<Marker | null>;
   onPlay: (x: number, y: number) => void;
 };
 
@@ -26,6 +27,7 @@ export const GobanView = ({
   disabled = false,
   compact = false,
   showCoordinates = true,
+  extraMarkerMap,
   onPlay
 }: GobanViewProps) => {
   const shellRef = useRef<HTMLDivElement | null>(null);
@@ -39,12 +41,15 @@ export const GobanView = ({
   }, [state.boardSize, state.grid]);
 
   const markerMap = useMemo<ShudanMap<Marker | null>>(() => {
-    const markers = createEmptyMarkerMap(state.boardSize);
+    const markers =
+      extraMarkerMap?.map((row) => row.map((marker) => (marker ? { ...marker } : null))) ??
+      createEmptyMarkerMap(state.boardSize);
+
     if (state.lastMove && !("pass" in state.lastMove)) {
       markers[state.lastMove.y][state.lastMove.x] = { type: "point", label: "last" };
     }
     return markers;
-  }, [state.boardSize, state.lastMove]);
+  }, [extraMarkerMap, state.boardSize, state.lastMove]);
 
   useEffect(() => {
     const shell = shellRef.current;

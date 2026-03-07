@@ -63,3 +63,50 @@ export class InvalidMoveError extends Error {
 }
 
 export type PlayerStone = 0 | 1 | 2;
+
+export type AnalysisRules = "japanese" | "chinese" | "aga" | "korean";
+export type OwnershipValue = number;
+
+export type AnalysisRequest = {
+  boardSize: number;
+  komi: number;
+  handicap: number;
+  rules: AnalysisRules;
+  moves: Move[];
+  maxVisits: number;
+  includeOwnership: boolean;
+};
+
+export type MoveAnalysisRequest = AnalysisRequest & {
+  topN: number;
+};
+
+export type MoveCandidate = {
+  move: Move;
+  winrate: number | null;
+  scoreLead: number | null;
+  visits: number | null;
+};
+
+export type ScoreAnalysisResult = {
+  scoreLead: number;
+  winrate: number | null;
+  visits: number | null;
+  ownership: OwnershipValue[][] | null;
+  engine: string;
+  blackScore?: number;
+  whiteScore?: number;
+  deadStones?: { B: number; W: number };
+  source?: "local" | "api-fallback";
+  elapsedMs?: number;
+  quality?: "quick" | "fallback";
+};
+
+export type MoveAnalysisResult = {
+  bestMove: Move | null;
+  candidates: MoveCandidate[];
+  scoreLead: number;
+  winrate: number;
+  visits: number;
+  engine: string;
+};

@@ -211,6 +211,42 @@ button.subtle {
   height: 100%;
 }
 
+.goban-view .shudan-vertex.shudan-marker_square[title="influence-black-1"] .shudan-marker {
+  fill: rgba(22, 22, 22, 0.22);
+  stroke: rgba(12, 12, 12, 0.4);
+  stroke-width: 0.04em;
+}
+
+.goban-view .shudan-vertex.shudan-marker_square[title="influence-black-2"] .shudan-marker {
+  fill: rgba(20, 20, 20, 0.45);
+  stroke: rgba(10, 10, 10, 0.62);
+  stroke-width: 0.05em;
+}
+
+.goban-view .shudan-vertex.shudan-marker_square[title="influence-black-3"] .shudan-marker {
+  fill: rgba(16, 16, 16, 0.62);
+  stroke: rgba(8, 8, 8, 0.82);
+  stroke-width: 0.05em;
+}
+
+.goban-view .shudan-vertex.shudan-marker_square[title="influence-white-1"] .shudan-marker {
+  fill: rgba(255, 255, 255, 0.26);
+  stroke: rgba(46, 46, 46, 0.38);
+  stroke-width: 0.04em;
+}
+
+.goban-view .shudan-vertex.shudan-marker_square[title="influence-white-2"] .shudan-marker {
+  fill: rgba(255, 255, 255, 0.53);
+  stroke: rgba(46, 46, 46, 0.58);
+  stroke-width: 0.05em;
+}
+
+.goban-view .shudan-vertex.shudan-marker_square[title="influence-white-3"] .shudan-marker {
+  fill: rgba(255, 255, 255, 0.78);
+  stroke: rgba(46, 46, 46, 0.76);
+  stroke-width: 0.05em;
+}
+
 .igl-goban {
   max-width: 100%;
   max-height: 100%;
@@ -274,6 +310,78 @@ button.subtle {
 
 .controls-grid .full {
   grid-column: 1 / -1;
+}
+
+.analysis-card {
+  margin-top: 0.75rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid #e7e0d3;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.analysis-title {
+  margin: 0;
+  font-size: 0.86rem;
+  color: #4b4237;
+}
+
+.analysis-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+}
+
+.analysis-actions.single {
+  grid-template-columns: 1fr;
+}
+
+.deadstone-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+}
+
+.analysis-status {
+  margin: 0;
+  font-size: 0.83rem;
+}
+
+.analysis-error {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.analysis-result {
+  border: 1px solid #ddd5c7;
+  border-radius: 8px;
+  padding: 0.45rem;
+  background: #fbf9f4;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.analysis-line {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.analysis-help {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.analysis-candidates {
+  margin: 0.2rem 0 0;
+  padding-left: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.8rem;
+  color: #474747;
 }
 
 .state-grid {
@@ -479,6 +587,14 @@ button.subtle {
 
 .board-screen.layout-mobile .panel-scroll {
   max-height: 34vh;
+}
+
+.board-screen.layout-mobile .analysis-actions {
+  grid-template-columns: 1fr;
+}
+
+.board-screen.layout-mobile .deadstone-actions {
+  grid-template-columns: 1fr;
 }
 
 .board-screen.layout-mobile .note-input {
