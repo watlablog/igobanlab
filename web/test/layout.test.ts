@@ -44,4 +44,21 @@ describe("layout", () => {
     expect(large).toBeLessThanOrEqual(34);
     expect(small).toBeGreaterThanOrEqual(10);
   });
+
+  it("stabilizes vertex size for close fractional container sizes", () => {
+    const a = computeVertexSize({
+      containerWidth: 650.2,
+      containerHeight: 650.2,
+      boardSize: 19,
+      showCoordinates: true
+    });
+    const b = computeVertexSize({
+      containerWidth: 650.8,
+      containerHeight: 650.8,
+      boardSize: 19,
+      showCoordinates: true
+    });
+
+    expect(a).toBe(b);
+  });
 });

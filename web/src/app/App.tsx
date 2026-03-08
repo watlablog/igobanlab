@@ -91,6 +91,7 @@ export const App = () => {
   const [authReady, setAuthReady] = useState(false);
   const [screen, setScreen] = useState<AppScreen>("login");
   const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>(initialPreset);
+  const [resizeKey, setResizeKey] = useState(0);
 
   const [activeSetup, setActiveSetup] = useState<GameSetup>(DEFAULT_SETUP);
   const [activeHandicapSelection, setActiveHandicapSelection] =
@@ -130,14 +131,29 @@ export const App = () => {
       return;
     }
 
+    let rafId: number | null = null;
     const handleResize = () => {
+      rafId = null;
       setLayoutPreset(resolveLayoutPreset(window.innerWidth, window.innerHeight));
+      setResizeKey((prev) => prev + 1);
+    };
+
+    const scheduleResize = () => {
+      if (rafId != null) {
+        return;
+      }
+      rafId = window.requestAnimationFrame(handleResize);
     };
 
     handleResize();
-    window.addEventListener("resize", handleResize);
+    window.addEventListener("resize", scheduleResize);
+    window.addEventListener("orientationchange", scheduleResize);
     return () => {
-      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("resize", scheduleResize);
+      window.removeEventListener("orientationchange", scheduleResize);
+      if (rafId != null) {
+        window.cancelAnimationFrame(rafId);
+      }
     };
   }, []);
 
@@ -642,6 +658,7 @@ export const App = () => {
                 onPlay={handlePlay}
                 compact={compactLayout}
                 showCoordinates={showCoordinates}
+                resizeKey={resizeKey}
                 extraMarkerMap={overlayMarkerMap}
                 selectedVertices={selectedVertices}
               />
@@ -698,9 +715,9 @@ export const App = () => {
               )}
             </section>
 
-            {isReviewingPast && (
-              <p className="muted">過去局面の確認中です。着手するには最後の手まで進めてください。</p>
-            )}
+            <p className={`muted review-warning ${isReviewingPast ? "visible" : "hidden"}`} aria-live="polite">
+              {isReviewingPast ? "過去局面の確認中です。着手するには最後の手まで進めてください。" : "\u00A0"}
+            </p>
           </section>
         </div>
 

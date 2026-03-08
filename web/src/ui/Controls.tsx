@@ -68,39 +68,52 @@ export const Controls = ({
         </button>
       </div>
 
-      {analysisBusy && <p className="muted analysis-status">解析中...</p>}
-      {analysisError && <p className="warning-text analysis-error">{analysisError}</p>}
+      <div className="analysis-feedback" aria-live="polite">
+        {analysisBusy ? (
+          <p className="muted analysis-status">解析中...</p>
+        ) : analysisError ? (
+          <p className="warning-text analysis-error">{analysisError}</p>
+        ) : (
+          <p className="muted analysis-status analysis-placeholder" aria-hidden="true">
+            {"\u00A0"}
+          </p>
+        )}
+      </div>
 
-      {scoreAnalysis && (
-        <div className="analysis-result">
-          {typeof scoreAnalysis.blackScore === "number" && (
-            <p className="analysis-line">blackInfluence: {scoreAnalysis.blackScore.toFixed(1)}</p>
-          )}
-          {typeof scoreAnalysis.whiteScore === "number" && (
-            <p className="analysis-line">whiteInfluence: {scoreAnalysis.whiteScore.toFixed(1)}</p>
-          )}
-          <p className="analysis-line">influenceLead: {scoreAnalysis.scoreLead.toFixed(2)}</p>
-          <p className="analysis-line">
-            winrate: {scoreAnalysis.winrate == null ? "-" : `${(scoreAnalysis.winrate * 100).toFixed(1)}%`}
-          </p>
-          <p className="analysis-line">visits: {scoreAnalysis.visits == null ? "-" : scoreAnalysis.visits}</p>
-          {ownershipSummary && (
+      <div className="analysis-result-shell">
+        {scoreAnalysis ? (
+          <div className="analysis-result">
+            {typeof scoreAnalysis.blackScore === "number" && (
+              <p className="analysis-line">blackInfluence: {scoreAnalysis.blackScore.toFixed(1)}</p>
+            )}
+            {typeof scoreAnalysis.whiteScore === "number" && (
+              <p className="analysis-line">whiteInfluence: {scoreAnalysis.whiteScore.toFixed(1)}</p>
+            )}
+            <p className="analysis-line">influenceLead: {scoreAnalysis.scoreLead.toFixed(2)}</p>
             <p className="analysis-line">
-              influence B/W/N: {ownershipSummary.black}/{ownershipSummary.white}/{ownershipSummary.neutral}
+              winrate: {scoreAnalysis.winrate == null ? "-" : `${(scoreAnalysis.winrate * 100).toFixed(1)}%`}
             </p>
-          )}
-          {scoreAnalysis.deadStones && (
+            <p className="analysis-line">visits: {scoreAnalysis.visits == null ? "-" : scoreAnalysis.visits}</p>
+            {ownershipSummary && (
+              <p className="analysis-line">
+                influence B/W/N: {ownershipSummary.black}/{ownershipSummary.white}/{ownershipSummary.neutral}
+              </p>
+            )}
+            {scoreAnalysis.deadStones && (
+              <p className="analysis-line">
+                dead stones B/W: {scoreAnalysis.deadStones.B}/{scoreAnalysis.deadStones.W}
+              </p>
+            )}
             <p className="analysis-line">
-              dead stones B/W: {scoreAnalysis.deadStones.B}/{scoreAnalysis.deadStones.W}
+              source: {scoreAnalysis.source ?? "-"} / elapsed:{" "}
+              {typeof scoreAnalysis.elapsedMs === "number" ? `${scoreAnalysis.elapsedMs}ms` : "-"}
             </p>
-          )}
-          <p className="analysis-line">
-            source: {scoreAnalysis.source ?? "-"} / elapsed:{" "}
-            {typeof scoreAnalysis.elapsedMs === "number" ? `${scoreAnalysis.elapsedMs}ms` : "-"}
-          </p>
-          <p className="analysis-line muted">engine: {scoreAnalysis.engine}</p>
-        </div>
-      )}
+            <p className="analysis-line muted">engine: {scoreAnalysis.engine}</p>
+          </div>
+        ) : (
+          <p className="analysis-empty muted">勢力表示は未実行です。</p>
+        )}
+      </div>
     </section>
   </section>
 );

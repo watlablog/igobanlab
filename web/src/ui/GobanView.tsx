@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { h, render } from "preact";
 import { Goban, type Map as ShudanMap, type Marker } from "@sabaki/shudan";
 import type { GameState } from "../types/models";
@@ -9,6 +9,7 @@ type GobanViewProps = {
   disabled?: boolean;
   compact?: boolean;
   showCoordinates?: boolean;
+  resizeKey?: number;
   extraMarkerMap?: ShudanMap<Marker | null>;
   selectedVertices?: [number, number][];
   onPlay: (x: number, y: number) => void;
@@ -25,6 +26,7 @@ export const GobanView = ({
   disabled = false,
   compact = false,
   showCoordinates = true,
+  resizeKey = 0,
   extraMarkerMap,
   selectedVertices = [],
   onPlay
@@ -32,7 +34,7 @@ export const GobanView = ({
   const shellRef = useRef<HTMLDivElement | null>(null);
   const mountRef = useRef<HTMLDivElement | null>(null);
   const onPlayRef = useRef(onPlay);
-  const [vertexSize, setVertexSize] = useState(30);
+  const [vertexSize, setVertexSize] = useState<number | null>(null);
 
   useEffect(() => {
     onPlayRef.current = onPlay;
@@ -49,30 +51,21 @@ export const GobanView = ({
     [extraMarkerMap]
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const shell = shellRef.current;
-    if (!shell || typeof ResizeObserver === "undefined") {
+    if (!shell) {
       return;
     }
 
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (!entry) return;
-
-      const nextSize = computeVertexSize({
-        containerWidth: entry.contentRect.width,
-        containerHeight: entry.contentRect.height,
-        boardSize: state.boardSize,
-        showCoordinates
-      });
-      setVertexSize((prev) => (prev === nextSize ? prev : nextSize));
+    const rect = shell.getBoundingClientRect();
+    const nextSize = computeVertexSize({
+      containerWidth: rect.width,
+      containerHeight: rect.height,
+      boardSize: state.boardSize,
+      showCoordinates
     });
-
-    observer.observe(shell);
-    return () => {
-      observer.disconnect();
-    };
-  }, [showCoordinates, state.boardSize]);
+    setVertexSize((prev) => (prev === nextSize ? prev : nextSize));
+  }, [resizeKey, showCoordinates, state.boardSize]);
 
   const handleVertexClick = useCallback((_evt: MouseEvent, vertex: [number, number]) => {
     const [x, y] = vertex;
@@ -82,6 +75,9 @@ export const GobanView = ({
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) {
+      return;
+    }
+    if (vertexSize == null) {
       return;
     }
 

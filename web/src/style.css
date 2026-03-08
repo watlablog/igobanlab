@@ -150,7 +150,7 @@ button.subtle {
   align-items: center;
   justify-content: space-between;
   gap: 0.4rem;
-  min-height: 0;
+  min-height: 2rem;
 }
 
 .board-inline-state {
@@ -159,6 +159,7 @@ button.subtle {
   gap: 0.35rem;
   flex-wrap: nowrap;
   min-width: 0;
+  min-height: 1.8rem;
   overflow-x: auto;
   white-space: nowrap;
 }
@@ -178,7 +179,10 @@ button.subtle {
 .ply-badge {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   padding: 0.3rem 0.55rem;
+  min-width: 5.6rem;
+  min-height: 1.8rem;
   border: 1px solid #cfc4b2;
   border-radius: 999px;
   background: #f8f3e7;
@@ -276,7 +280,7 @@ button.subtle {
 
 .sidebar {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0.6rem;
   min-height: 0;
   overflow: hidden;
@@ -301,19 +305,27 @@ button.subtle {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
 }
 
 .panel-scroll {
+  flex: 1 1 auto;
   min-height: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
 }
 
 .panel-status {
   margin: 0.5rem 0 0;
   padding-top: 0.35rem;
+  min-height: 2.4rem;
+  max-height: 2.4rem;
   border-top: 1px solid #e7e0d3;
   font-size: 0.8rem;
   color: #6c6c6c;
+  overflow: auto;
+  scrollbar-gutter: stable;
 }
 
 .row {
@@ -340,7 +352,10 @@ button.subtle {
   border-top: 1px solid #e7e0d3;
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
   gap: 0.45rem;
+  overflow: hidden;
 }
 
 .analysis-title {
@@ -370,19 +385,44 @@ button.subtle {
   font-size: 0.83rem;
 }
 
+.analysis-feedback {
+  min-height: 2rem;
+  max-height: 3.2rem;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
 .analysis-error {
   margin: 0;
   font-size: 0.82rem;
 }
 
-.analysis-result {
+.analysis-placeholder {
+  min-height: 1.35rem;
+}
+
+.analysis-result-shell {
+  flex: 1 1 auto;
+  min-height: 7.5rem;
+  max-height: 9.8rem;
   border: 1px solid #ddd5c7;
   border-radius: 8px;
-  padding: 0.45rem;
   background: #fbf9f4;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.analysis-result {
+  padding: 0.45rem;
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
+}
+
+.analysis-empty {
+  margin: 0;
+  padding: 0.45rem;
+  font-size: 0.82rem;
 }
 
 .analysis-line {
@@ -463,8 +503,11 @@ button.subtle {
   padding: 0.4rem;
   display: flex;
   flex-direction: column;
+  height: 7.9rem;
+  min-height: 7.9rem;
+  max-height: 7.9rem;
   gap: 0.35rem;
-  min-height: 0;
+  overflow: hidden;
 }
 
 .note-toggle {
@@ -479,6 +522,9 @@ button.subtle {
   padding: 0.1rem 0.35rem 0.2rem;
   color: #5d5d5d;
   line-height: 1.35;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
 }
 
 .note-shell.collapsed .note-preview {
@@ -491,11 +537,31 @@ button.subtle {
   border: 1px solid #c8c1b2;
   border-radius: 8px;
   padding: 0.55rem 0.6rem;
+  flex: 1 1 auto;
   font: inherit;
-  min-height: 72px;
-  max-height: clamp(72px, 14vh, 140px);
+  min-height: 0;
+  max-height: none;
   overflow: auto;
-  resize: vertical;
+  resize: none;
+  scrollbar-gutter: stable;
+}
+
+.review-warning {
+  margin: 0;
+  min-height: 1.3rem;
+  max-height: 1.3rem;
+  overflow: hidden;
+}
+
+.review-warning.hidden {
+  visibility: hidden;
+}
+
+.action-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .move-nav-actions {
@@ -621,6 +687,16 @@ button.subtle {
 
 .board-screen.layout-mobile .note-input {
   max-height: 28vh;
+}
+
+.board-screen.layout-mobile .note-shell {
+  height: auto;
+  min-height: 7.9rem;
+  max-height: none;
+}
+
+.board-screen.layout-mobile .analysis-result-shell {
+  max-height: 30vh;
 }
 
 .board-screen .board-panel,

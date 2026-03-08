@@ -58,8 +58,8 @@ export const computeVertexSize = ({
   showCoordinates
 }: VertexSizeInput): number => {
   const normalizedBoardSize = Number.isFinite(boardSize) && boardSize > 0 ? boardSize : 19;
-  const width = Number.isFinite(containerWidth) ? containerWidth : 0;
-  const height = Number.isFinite(containerHeight) ? containerHeight : 0;
+  const width = Number.isFinite(containerWidth) ? Math.round(containerWidth) : 0;
+  const height = Number.isFinite(containerHeight) ? Math.round(containerHeight) : 0;
   const available = Math.max(0, Math.min(width, height));
   const paddingFactor = showCoordinates ? 3.0 : 1.8;
   const raw = Math.floor(available / (normalizedBoardSize + paddingFactor));
