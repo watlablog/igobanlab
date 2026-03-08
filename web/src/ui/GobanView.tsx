@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { h, render } from "preact";
 import { Goban, type Map as ShudanMap, type Marker } from "@sabaki/shudan";
 import type { GameState } from "../types/models";
@@ -10,6 +10,7 @@ type GobanViewProps = {
   compact?: boolean;
   showCoordinates?: boolean;
   extraMarkerMap?: ShudanMap<Marker | null>;
+  selectedVertices?: [number, number][];
   onPlay: (x: number, y: number) => void;
 };
 
@@ -19,20 +20,23 @@ const convertSign = (value: number): 0 | 1 | -1 => {
   return 0;
 };
 
-const createEmptyMarkerMap = (boardSize: number): ShudanMap<Marker | null> =>
-  Array.from({ length: boardSize }, () => Array.from({ length: boardSize }, () => null));
-
 export const GobanView = ({
   state,
   disabled = false,
   compact = false,
   showCoordinates = true,
   extraMarkerMap,
+  selectedVertices = [],
   onPlay
 }: GobanViewProps) => {
   const shellRef = useRef<HTMLDivElement | null>(null);
   const mountRef = useRef<HTMLDivElement | null>(null);
+  const onPlayRef = useRef(onPlay);
   const [vertexSize, setVertexSize] = useState(30);
+
+  useEffect(() => {
+    onPlayRef.current = onPlay;
+  }, [onPlay]);
 
   const signMap = useMemo<ShudanMap<0 | 1 | -1>>(() => {
     return Array.from({ length: state.boardSize }, (_, y) =>
@@ -40,16 +44,10 @@ export const GobanView = ({
     );
   }, [state.boardSize, state.grid]);
 
-  const markerMap = useMemo<ShudanMap<Marker | null>>(() => {
-    const markers =
-      extraMarkerMap?.map((row) => row.map((marker) => (marker ? { ...marker } : null))) ??
-      createEmptyMarkerMap(state.boardSize);
-
-    if (state.lastMove && !("pass" in state.lastMove)) {
-      markers[state.lastMove.y][state.lastMove.x] = { type: "point", label: "last" };
-    }
-    return markers;
-  }, [extraMarkerMap, state.boardSize, state.lastMove]);
+  const markerMap = useMemo<ShudanMap<Marker | null> | undefined>(
+    () => extraMarkerMap,
+    [extraMarkerMap]
+  );
 
   useEffect(() => {
     const shell = shellRef.current;
@@ -76,6 +74,11 @@ export const GobanView = ({
     };
   }, [showCoordinates, state.boardSize]);
 
+  const handleVertexClick = useCallback((_evt: MouseEvent, vertex: [number, number]) => {
+    const [x, y] = vertex;
+    onPlayRef.current(x, y);
+  }, []);
+
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) {
@@ -89,19 +92,24 @@ export const GobanView = ({
         showCoordinates,
         signMap,
         markerMap,
+        selectedVertices,
         busy: disabled,
-        onVertexClick: (_evt: MouseEvent, vertex: [number, number]) => {
-          const [x, y] = vertex;
-          onPlay(x, y);
-        }
+        animateStonePlacement: false,
+        fuzzyStonePlacement: false,
+        onVertexClick: handleVertexClick
       }),
       mount
     );
+  }, [compact, disabled, handleVertexClick, markerMap, selectedVertices, showCoordinates, signMap, vertexSize]);
 
+  useEffect(() => {
     return () => {
-      render(null, mount);
+      const mount = mountRef.current;
+      if (mount) {
+        render(null, mount);
+      }
     };
-  }, [compact, disabled, markerMap, onPlay, showCoordinates, signMap, vertexSize]);
+  }, []);
 
   return (
     <div className={`goban-view ${compact ? "compact" : ""}`} ref={shellRef}>

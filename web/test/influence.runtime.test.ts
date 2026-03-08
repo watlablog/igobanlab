@@ -16,9 +16,6 @@ const createState = (): GameState => ({
   lastMove: null
 });
 
-const createDeadGrid = (): boolean[][] =>
-  Array.from({ length: 5 }, () => Array.from({ length: 5 }, () => false));
-
 const installWorkerMock = (mode: WorkerMode): void => {
   class MockWorker {
     onmessage: ((event: { data: unknown }) => void) | null = null;
@@ -86,7 +83,6 @@ describe("influence runtime", () => {
 
     const result = await runtime.analyzeInfluenceWithFallback({
       state: createState(),
-      deadGrid: createDeadGrid(),
       requestApiFallback: apiFallback
     });
 
@@ -108,7 +104,6 @@ describe("influence runtime", () => {
 
     const result = await runtime.analyzeInfluenceWithFallback({
       state: createState(),
-      deadGrid: createDeadGrid(),
       requestApiFallback: apiFallback
     });
 
@@ -127,7 +122,6 @@ describe("influence runtime", () => {
     await expect(
       runtime.analyzeInfluenceWithFallback({
         state: createState(),
-        deadGrid: createDeadGrid(),
         requestApiFallback: apiFallback
       })
     ).rejects.toThrow("API fail");

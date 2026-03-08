@@ -10,7 +10,6 @@ type ControlsProps = {
   scoreAnalysis: ScoreAnalysisResult | null;
   ownershipSummary: OwnershipSummary | null;
   analysisError: string | null;
-  deadStoneCounts: { B: number; W: number };
   onPass: () => void;
   onUndo: () => void;
   onRedo: () => void;
@@ -28,7 +27,6 @@ export const Controls = ({
   scoreAnalysis,
   ownershipSummary,
   analysisError,
-  deadStoneCounts,
   onPass,
   onUndo,
   onRedo,
@@ -69,10 +67,6 @@ export const Controls = ({
           勢力表示
         </button>
       </div>
-
-      <p className="muted analysis-line">
-        死石 B/W: {deadStoneCounts.B}/{deadStoneCounts.W}
-      </p>
 
       {analysisBusy && <p className="muted analysis-status">解析中...</p>}
       {analysisError && <p className="warning-text analysis-error">{analysisError}</p>}

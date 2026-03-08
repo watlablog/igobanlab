@@ -247,6 +247,28 @@ button.subtle {
   stroke-width: 0.05em;
 }
 
+.goban-view .shudan-vertex.shudan-selected .shudan-selection {
+  width: 0.22em;
+  height: 0.22em;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  border: none;
+  border-radius: 999px;
+  background: rgba(34, 34, 34, 0.9);
+  box-shadow: 0 0 0 0.04em rgba(255, 255, 255, 0.55);
+}
+
+.goban-view .shudan-vertex.shudan-sign_1.shudan-selected .shudan-selection {
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 0 0.04em rgba(22, 22, 22, 0.6);
+}
+
+.goban-view .shudan-vertex.shudan-sign_-1.shudan-selected .shudan-selection {
+  background: rgba(22, 22, 22, 0.92);
+  box-shadow: 0 0 0 0.04em rgba(248, 248, 248, 0.7);
+}
+
 .igl-goban {
   max-width: 100%;
   max-height: 100%;

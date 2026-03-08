@@ -8,7 +8,6 @@ type WorkerRequest =
       payload: {
         boardSize: number;
         stones: number[];
-        deadMarks: boolean[];
         komi: number;
         capturesB: number;
         capturesW: number;
@@ -36,7 +35,6 @@ type PendingRequest = {
 
 type InfluenceRequestInput = {
   state: GameState;
-  deadGrid: boolean[][];
   requestApiFallback: () => Promise<ScoreAnalysisResult>;
   localTimeoutMs?: number;
 };
@@ -77,8 +75,7 @@ const cloneOwnership = (ownership: number[][] | null): number[][] | null => {
 
 const cloneScoreResult = (result: ScoreAnalysisResult): ScoreAnalysisResult => ({
   ...result,
-  ownership: cloneOwnership(result.ownership),
-  deadStones: result.deadStones ? { ...result.deadStones } : undefined
+  ownership: cloneOwnership(result.ownership)
 });
 
 const setCache = (key: string, value: ScoreAnalysisResult): void => {
@@ -150,60 +147,25 @@ const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<
   });
 };
 
-const flattenDeadGrid = (deadGrid: boolean[][], boardSize: number): boolean[] => {
-  const flat = new Array<boolean>(boardSize * boardSize).fill(false);
-  for (let y = 0; y < boardSize; y += 1) {
-    const row = deadGrid[y];
-    if (!Array.isArray(row)) continue;
-    for (let x = 0; x < boardSize; x += 1) {
-      flat[y * boardSize + x] = row[x] === true;
-    }
-  }
-  return flat;
-};
-
-const countDeadStones = (
-  state: GameState,
-  deadGrid: boolean[][]
-): { B: number; W: number } => {
-  let black = 0;
-  let white = 0;
-  for (let y = 0; y < state.boardSize; y += 1) {
-    for (let x = 0; x < state.boardSize; x += 1) {
-      if (!deadGrid[y]?.[x]) continue;
-      const stone = state.grid[y * state.boardSize + x];
-      if (stone === 1) black += 1;
-      if (stone === 2) white += 1;
-    }
-  }
-  return { B: black, W: white };
-};
-
-const makeCacheKey = (state: GameState, deadGrid: boolean[][]): string => {
-  const dead = flattenDeadGrid(deadGrid, state.boardSize);
+const makeCacheKey = (state: GameState): string => {
   let stonesPart = "";
-  let deadPart = "";
   for (let i = 0; i < state.grid.length; i += 1) {
     stonesPart += state.grid[i].toString();
-    deadPart += dead[i] ? "1" : "0";
   }
   return [
     state.boardSize,
     state.komi,
     state.captures.B,
     state.captures.W,
-    stonesPart,
-    deadPart
+    stonesPart
   ].join("|");
 };
 
 const runLocalInfluence = async (
   state: GameState,
-  deadGrid: boolean[][],
   timeoutMs: number
 ): Promise<ScoreAnalysisResult> => {
   const requestId = ++workerRequestId;
-  const deadFlat = flattenDeadGrid(deadGrid, state.boardSize);
   const startedAt = nowMs();
 
   const response = await withTimeout(
@@ -213,7 +175,6 @@ const runLocalInfluence = async (
       payload: {
         boardSize: state.boardSize,
         stones: Array.from(state.grid),
-        deadMarks: deadFlat,
         komi: state.komi,
         capturesB: state.captures.B,
         capturesW: state.captures.W
@@ -229,7 +190,6 @@ const runLocalInfluence = async (
     throw new LocalInfluenceError("LOCAL_INFLUENCE_PROTOCOL", "Unexpected worker response.");
   }
 
-  const deadStones = countDeadStones(state, deadGrid);
   return {
     scoreLead: response.payload.scoreLead,
     winrate: null,
@@ -238,7 +198,6 @@ const runLocalInfluence = async (
     engine: "Local(OGS-like)",
     blackScore: response.payload.blackScore,
     whiteScore: response.payload.whiteScore,
-    deadStones,
     source: "local",
     elapsedMs: Math.round(nowMs() - startedAt),
     quality: "quick"
@@ -247,12 +206,10 @@ const runLocalInfluence = async (
 
 const toFallbackResult = (
   response: ScoreAnalysisResult,
-  startedAt: number,
-  deadStones: { B: number; W: number }
+  startedAt: number
 ): ScoreAnalysisResult => ({
   ...response,
   ownership: cloneOwnership(response.ownership),
-  deadStones: response.deadStones ?? deadStones,
   source: "api-fallback",
   elapsedMs: Math.round(nowMs() - startedAt),
   quality: "fallback"
@@ -268,29 +225,26 @@ export const warmupInfluenceRuntime = async (): Promise<void> => {
 
 export const analyzeInfluenceWithFallback = async ({
   state,
-  deadGrid,
   requestApiFallback,
   localTimeoutMs = DEFAULT_LOCAL_TIMEOUT_MS
 }: InfluenceRequestInput): Promise<ScoreAnalysisResult> => {
-  const key = makeCacheKey(state, deadGrid);
+  const key = makeCacheKey(state);
   const cached = getCache(key);
   if (cached) return cached;
 
   const startedAt = nowMs();
   try {
-    const local = await runLocalInfluence(state, deadGrid, localTimeoutMs);
+    const local = await runLocalInfluence(state, localTimeoutMs);
     setCache(key, local);
     return cloneScoreResult(local);
   } catch {
-    const deadStones = countDeadStones(state, deadGrid);
     const fallback = await requestApiFallback();
-    const mapped = toFallbackResult(fallback, startedAt, deadStones);
+    const mapped = toFallbackResult(fallback, startedAt);
     setCache(key, mapped);
     return cloneScoreResult(mapped);
   }
 };
 
 export const __internalForTests = {
-  makeCacheKey,
-  countDeadStones
+  makeCacheKey
 };

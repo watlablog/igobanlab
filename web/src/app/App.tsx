@@ -15,12 +15,6 @@ import {
   buildScoreAnalysisRequest,
   summarizeOwnership
 } from "./analysis";
-import {
-  countDeadStones,
-  getDeadMarkGrid,
-  toggleDeadMarkAt,
-  type DeadMarksByPly
-} from "./localScoring";
 import { markerLabelFromInfluence } from "./influence";
 import {
   analyzeInfluenceWithFallback,
@@ -113,8 +107,6 @@ export const App = () => {
   const [analysisBusy, setAnalysisBusy] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [scoreAnalysis, setScoreAnalysis] = useState<ScoreAnalysisResult | null>(null);
-  const [isDeadStoneEditMode, setIsDeadStoneEditMode] = useState(false);
-  const [deadMarksByPly, setDeadMarksByPly] = useState<DeadMarksByPly>({});
   const analysisRequestIdRef = useRef(0);
 
   useEffect(() => {
@@ -157,7 +149,6 @@ export const App = () => {
     const timer = window.setTimeout(async () => {
       try {
         await saveActiveGame(user.uid, state);
-        setStatusMessage("Active game saved.");
       } catch {
         setStatusMessage("Failed to save game.");
       }
@@ -193,7 +184,6 @@ export const App = () => {
 
   const isReviewingPast = reviewPly < state.moves.length;
   const interactionDisabled = !playEnabled || isReviewingPast;
-  const boardInteractionDisabled = !isDeadStoneEditMode && interactionDisabled;
   const compactLayout = isCompactLayout(layoutPreset);
   const showCoordinates = layoutPreset === "desktop";
   const noteTitle = reviewPly === 0 ? "開始局面メモ" : `${reviewPly}手目メモ`;
@@ -211,61 +201,31 @@ export const App = () => {
     return stateFromSnapshot(snapshot);
   }, [reviewPly, state]);
 
-  const deadMarkGrid = useMemo(
-    () => getDeadMarkGrid(deadMarksByPly, reviewPly, displayState.boardSize),
-    [deadMarksByPly, displayState.boardSize, reviewPly]
-  );
+  const overlayMarkerMap = useMemo(() => {
+    const ownership = scoreAnalysis?.ownership;
+    if (!ownership) return undefined;
+    return Array.from({ length: displayState.boardSize }, (_, y) =>
+      Array.from({ length: displayState.boardSize }, (_, x) => {
+        const ownershipValue = ownership[y]?.[x];
+        if (typeof ownershipValue !== "number") return null;
+        if (displayState.grid[y * displayState.boardSize + x] !== 0) return null;
+        const label = markerLabelFromInfluence(ownershipValue);
+        return label ? { type: "square" as const, label } : null;
+      })
+    );
+  }, [displayState.boardSize, displayState.grid, scoreAnalysis?.ownership]);
 
-  const deadStoneCounts = useMemo(
-    () => countDeadStones(displayState, deadMarkGrid),
-    [deadMarkGrid, displayState]
-  );
-
-  const deadStoneMarkerMap = useMemo(
-    () =>
-      Array.from({ length: displayState.boardSize }, (_, y) =>
-        Array.from({ length: displayState.boardSize }, (_, x) => {
-          if (!deadMarkGrid[y]?.[x]) return null;
-          const stone = displayState.grid[y * displayState.boardSize + x];
-          if (stone === 0) return null;
-          return { type: "cross" as const };
-        })
-      ),
-    [deadMarkGrid, displayState.boardSize, displayState.grid]
-  );
-
-  const influenceMarkerMap = useMemo(
-    () =>
-      Array.from({ length: displayState.boardSize }, (_, y) =>
-        Array.from({ length: displayState.boardSize }, (_, x) => {
-          const ownershipValue = scoreAnalysis?.ownership?.[y]?.[x];
-          if (typeof ownershipValue !== "number") return null;
-          if (displayState.grid[y * displayState.boardSize + x] !== 0) return null;
-          const label = markerLabelFromInfluence(ownershipValue);
-          return label ? { type: "square" as const, label } : null;
-        })
-      ),
-    [displayState.boardSize, displayState.grid, scoreAnalysis?.ownership]
-  );
-
-  const overlayMarkerMap = useMemo(
-    () =>
-      influenceMarkerMap.map((row, y) =>
-        row.map((marker, x) => deadStoneMarkerMap[y]?.[x] ?? marker)
-      ),
-    [deadStoneMarkerMap, influenceMarkerMap]
-  );
+  const selectedVertices = useMemo<[number, number][]>(() => {
+    const lastMove = displayState.lastMove;
+    if (!lastMove || "pass" in lastMove) return [];
+    return [[lastMove.x, lastMove.y]];
+  }, [displayState.lastMove]);
 
   const clearAnalysisState = useCallback(() => {
     analysisRequestIdRef.current += 1;
     setAnalysisBusy(false);
     setScoreAnalysis(null);
     setAnalysisError(null);
-  }, []);
-
-  const resetDeadStoneState = useCallback(() => {
-    setDeadMarksByPly({});
-    setIsDeadStoneEditMode(false);
   }, []);
 
   const ownershipSummary = useMemo(
@@ -313,7 +273,6 @@ export const App = () => {
     try {
       const result = await analyzeInfluenceWithFallback({
         state: displayState,
-        deadGrid: deadMarkGrid,
         requestApiFallback: async () => {
           const request = buildScoreAnalysisRequest(displayState, {
             includeOwnership: true,
@@ -339,64 +298,42 @@ export const App = () => {
         setAnalysisBusy(false);
       }
     }
-  }, [analysisBusy, deadMarkGrid, displayState, formatAnalysisError, playEnabled, user?.uid]);
+  }, [analysisBusy, displayState, formatAnalysisError, playEnabled, user?.uid]);
 
   const handlePlay = useCallback(
     (x: number, y: number) => {
-      if (isDeadStoneEditMode) {
-        const nextDeadGrid = toggleDeadMarkAt(displayState, deadMarkGrid, x, y);
-        if (nextDeadGrid !== deadMarkGrid) {
-          setDeadMarksByPly((prev) => ({ ...prev, [reviewPly]: nextDeadGrid }));
-          setScoreAnalysis(null);
-          setAnalysisError(null);
-        }
-        return;
-      }
       if (interactionDisabled) return;
-      resetDeadStoneState();
       clearAnalysisState();
       dispatch({ type: "PLAY", move: { x, y } });
     },
-    [
-      clearAnalysisState,
-      deadMarkGrid,
-      displayState,
-      interactionDisabled,
-      isDeadStoneEditMode,
-      resetDeadStoneState,
-      reviewPly
-    ]
+    [clearAnalysisState, interactionDisabled]
   );
 
   const handlePass = useCallback(() => {
     if (interactionDisabled) return;
-    resetDeadStoneState();
     clearAnalysisState();
     dispatch({ type: "PASS" });
-  }, [clearAnalysisState, interactionDisabled, resetDeadStoneState]);
+  }, [clearAnalysisState, interactionDisabled]);
 
   const handleUndo = useCallback(() => {
     if (interactionDisabled) return;
-    resetDeadStoneState();
     clearAnalysisState();
     dispatch({ type: "UNDO" });
-  }, [clearAnalysisState, interactionDisabled, resetDeadStoneState]);
+  }, [clearAnalysisState, interactionDisabled]);
 
   const handleRedo = useCallback(() => {
     if (interactionDisabled) return;
-    resetDeadStoneState();
     clearAnalysisState();
     dispatch({ type: "REDO" });
-  }, [clearAnalysisState, interactionDisabled, resetDeadStoneState]);
+  }, [clearAnalysisState, interactionDisabled]);
 
   const handleNewGame = useCallback(() => {
     if (interactionDisabled) return;
-    resetDeadStoneState();
     clearAnalysisState();
     dispatch({ type: "LOAD", state: createStateFromSetup(activeSetup) });
     setMoveNotes({});
     setStatusMessage("新しい盤面を開始しました。");
-  }, [activeSetup, clearAnalysisState, interactionDisabled, resetDeadStoneState]);
+  }, [activeSetup, clearAnalysisState, interactionDisabled]);
 
   const handleExportSgf = useCallback(() => {
     const sgf = exportMinimalSgf(state.boardSize, state.moves);
@@ -442,14 +379,13 @@ export const App = () => {
     setMoveNotes({});
     setReviewPly(0);
     setIsNoteExpanded(false);
-    resetDeadStoneState();
     clearAnalysisState();
     setAnalysisBusy(false);
     moveCountRef.current = 0;
     dispatch({ type: "LOAD", state: createStateFromSetup(normalizedSetup) });
     setStatusMessage("盤面を開始しました。");
     setScreen("board");
-  }, [clearAnalysisState, evenKomiMemory, resetDeadStoneState, setupDraft]);
+  }, [clearAnalysisState, evenKomiMemory, setupDraft]);
 
   const clearBoardSession = useCallback(() => {
     setActiveSetup(DEFAULT_SETUP);
@@ -460,13 +396,12 @@ export const App = () => {
     setMoveNotes({});
     setReviewPly(0);
     setIsNoteExpanded(false);
-    resetDeadStoneState();
     clearAnalysisState();
     setAnalysisBusy(false);
     moveCountRef.current = 0;
     dispatch({ type: "LOAD", state: createStateFromSetup(DEFAULT_SETUP) });
     setStatusMessage("準備完了");
-  }, [clearAnalysisState, resetDeadStoneState]);
+  }, [clearAnalysisState]);
 
   const hasGameInfoInput = useMemo(
     () => Object.values(gameInfo).some((value) => value.trim().length > 0),
@@ -703,11 +638,12 @@ export const App = () => {
             <div className="board-surface">
               <GobanView
                 state={displayState}
-                disabled={boardInteractionDisabled}
+                disabled={interactionDisabled}
                 onPlay={handlePlay}
                 compact={compactLayout}
                 showCoordinates={showCoordinates}
                 extraMarkerMap={overlayMarkerMap}
+                selectedVertices={selectedVertices}
               />
             </div>
 
@@ -845,7 +781,6 @@ export const App = () => {
             scoreAnalysis={scoreAnalysis}
             ownershipSummary={ownershipSummary}
             analysisError={analysisError}
-            deadStoneCounts={deadStoneCounts}
             onPass={handlePass}
             onUndo={handleUndo}
             onRedo={handleRedo}

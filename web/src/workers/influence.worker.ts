@@ -9,7 +9,6 @@ type WorkerRequest =
       payload: {
         boardSize: number;
         stones: number[];
-        deadMarks: boolean[];
         komi: number;
         capturesB: number;
         capturesW: number;
@@ -54,31 +53,15 @@ const clamp = (value: number): number => {
 
 const calcOwnership = (
   boardSize: number,
-  stones: number[],
-  deadMarks: boolean[]
-): { ownership: number[][]; deadB: number; deadW: number } => {
+  stones: number[]
+): { ownership: number[][] } => {
   const sources: InfluenceSource[] = [];
-  let deadB = 0;
-  let deadW = 0;
 
   for (let y = 0; y < boardSize; y += 1) {
     for (let x = 0; x < boardSize; x += 1) {
       const index = y * boardSize + x;
       const stone = stones[index] ?? 0;
-      const dead = deadMarks[index] === true;
       if (stone !== 1 && stone !== 2) continue;
-
-      if (dead) {
-        if (stone === 1) {
-          deadB += 1;
-          sources.push({ x, y, sign: -1, strength: 1.12 });
-        } else {
-          deadW += 1;
-          sources.push({ x, y, sign: 1, strength: 1.12 });
-        }
-        continue;
-      }
-
       sources.push({ x, y, sign: stone === 1 ? 1 : -1, strength: 1.0 });
     }
   }
@@ -91,10 +74,9 @@ const calcOwnership = (
     for (let x = 0; x < boardSize; x += 1) {
       const index = y * boardSize + x;
       const stone = stones[index] ?? 0;
-      const dead = deadMarks[index] === true;
 
       // Keep occupied vertices neutral so stone count itself does not dominate B/W/N.
-      if ((stone === 1 || stone === 2) && !dead) {
+      if (stone === 1 || stone === 2) {
         ownership[y][x] = 0;
         continue;
       }
@@ -123,7 +105,7 @@ const calcOwnership = (
     }
   }
 
-  return { ownership, deadB, deadW };
+  return { ownership };
 };
 
 const smoothOwnership = (ownership: number[][]): number[][] => {
@@ -158,12 +140,11 @@ const smoothOwnership = (ownership: number[][]): number[][] => {
 const computeInfluence = (
   boardSize: number,
   stones: number[],
-  deadMarks: boolean[],
   komi: number,
   capturesB: number,
   capturesW: number
 ): { ownership: number[][]; blackScore: number; whiteScore: number; scoreLead: number } => {
-  const { ownership: rawOwnership, deadB, deadW } = calcOwnership(boardSize, stones, deadMarks);
+  const { ownership: rawOwnership } = calcOwnership(boardSize, stones);
   const ownership = smoothOwnership(rawOwnership);
 
   let blackInfluence = 0;
@@ -176,8 +157,8 @@ const computeInfluence = (
     }
   }
 
-  const blackScore = blackInfluence + capturesB + deadW;
-  const whiteScore = whiteInfluence + capturesW + deadB + komi;
+  const blackScore = blackInfluence + capturesB;
+  const whiteScore = whiteInfluence + capturesW + komi;
   const scoreLead = blackScore - whiteScore;
 
   return {
@@ -201,8 +182,8 @@ onmessage = (event: MessageEvent<WorkerRequest>) => {
   }
 
   try {
-    const { boardSize, stones, deadMarks, komi, capturesB, capturesW } = data.payload;
-    const result = computeInfluence(boardSize, stones, deadMarks, komi, capturesB, capturesW);
+    const { boardSize, stones, komi, capturesB, capturesW } = data.payload;
+    const result = computeInfluence(boardSize, stones, komi, capturesB, capturesW);
     send({
       type: "result",
       id: data.id,
