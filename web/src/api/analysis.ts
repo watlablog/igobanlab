@@ -43,6 +43,12 @@ type MoveResponsePayloadBody = {
   engine: string;
 };
 
+type RequestOptions = {
+  timeoutMs?: number;
+};
+
+const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
+
 export class AnalysisApiError extends Error {
   readonly code: string;
   readonly status: number;
@@ -115,31 +121,65 @@ const toOwnershipGrid = (value: unknown): ScoreAnalysisResult["ownership"] => {
 const requestJson = async <TResponse, TPayload extends object>(
   path: string,
   payload: TPayload,
-  userId?: string
+  userId?: string,
+  options?: RequestOptions
 ): Promise<TResponse> => {
   const url = buildUrl(path);
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(userId ? { "X-User-Id": userId } : {})
-    },
-    body: JSON.stringify(payload)
-  });
+  const timeoutMs = Math.max(200, options?.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(userId ? { "X-User-Id": userId } : {})
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+  } catch (error) {
+    if ((error as { name?: string })?.name === "AbortError") {
+      throw new AnalysisApiError(
+        "API_TIMEOUT",
+        `分析APIがタイムアウトしました (${timeoutMs}ms)。`,
+        504
+      );
+    }
+    const message =
+      error instanceof Error && error.message.trim().length > 0
+        ? error.message
+        : "Failed to fetch";
+    throw new AnalysisApiError("NETWORK_ERROR", message, 0);
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!response.ok) {
-    let parsed: ApiErrorPayload | null = null;
+    const contentType = response.headers.get("content-type") ?? "";
+    let code = "ANALYSIS_REQUEST_FAILED";
+    let message = `Analysis request failed with status ${response.status}`;
+
     try {
-      parsed = (await response.json()) as ApiErrorPayload;
+      if (contentType.toLowerCase().includes("application/json")) {
+        const parsed = (await response.json()) as ApiErrorPayload;
+        code = parsed?.code ?? code;
+        message = parsed?.message ?? message;
+      } else {
+        const bodyText = await response.text();
+        if (bodyText.trim().length > 0) {
+          message = `${message}: ${bodyText.slice(0, 120)}`;
+        }
+      }
     } catch {
-      parsed = null;
+      // Keep default message when body parsing fails.
     }
 
-    throw new AnalysisApiError(
-      parsed?.code ?? "ANALYSIS_REQUEST_FAILED",
-      parsed?.message ?? `Analysis request failed with status ${response.status}`,
-      response.status
-    );
+    throw new AnalysisApiError(code, message, response.status);
   }
 
   const contentType = response.headers.get("content-type") ?? "";
@@ -157,12 +197,14 @@ const requestJson = async <TResponse, TPayload extends object>(
 
 export const requestScoreAnalysis = async (
   request: AnalysisRequest,
-  userId?: string
+  userId?: string,
+  options?: RequestOptions
 ): Promise<ScoreAnalysisResult> => {
   const response = await requestJson<ScoreResponsePayload, AnalysisRequest>(
     "/v1/analyze/score",
     request,
-    userId
+    userId,
+    options
   );
 
   return {

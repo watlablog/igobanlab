@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { GameState, ScoreAnalysisResult } from "../src/types/models";
+import type { GameState } from "../src/types/models";
 
 type WorkerMode = "success" | "error";
 
@@ -16,12 +16,15 @@ const createState = (): GameState => ({
   lastMove: null
 });
 
-const installWorkerMock = (mode: WorkerMode): void => {
+const installWorkerMock = (mode: WorkerMode): { getPostCount: () => number } => {
+  let postCount = 0;
+
   class MockWorker {
     onmessage: ((event: { data: unknown }) => void) | null = null;
     onerror: ((event: ErrorEvent) => void) | null = null;
 
     postMessage(message: { type: string; id: number }): void {
+      postCount += 1;
       queueMicrotask(() => {
         if (!this.onmessage) return;
         if (message.type === "warmup") {
@@ -60,6 +63,7 @@ const installWorkerMock = (mode: WorkerMode): void => {
   }
 
   globalThis.Worker = MockWorker as unknown as typeof Worker;
+  return { getPostCount: () => postCount };
 };
 
 const originalWorker = globalThis.Worker;
@@ -76,54 +80,34 @@ afterEach(() => {
 });
 
 describe("influence runtime", () => {
-  it("uses local influence first and skips API fallback on success", async () => {
+  it("uses local estimator and returns OGS source metadata", async () => {
     installWorkerMock("success");
     const runtime = await import("../src/app/influenceRuntime");
-    const apiFallback = vi.fn<() => Promise<ScoreAnalysisResult>>();
 
-    const result = await runtime.analyzeInfluenceWithFallback({
-      state: createState(),
-      requestApiFallback: apiFallback
+    const result = await runtime.analyzeInfluence({
+      state: createState()
     });
 
-    expect(result.source).toBe("local");
-    expect(result.engine).toBe("Local(OGS-like)");
-    expect(apiFallback).not.toHaveBeenCalled();
+    expect(result.source).toBe("local-estimator");
+    expect(result.engine).toBe("OGS-Estimator");
   });
 
-  it("falls back to API when local estimation fails", async () => {
-    installWorkerMock("error");
+  it("uses cache for identical board states", async () => {
+    const worker = installWorkerMock("success");
     const runtime = await import("../src/app/influenceRuntime");
-    const apiFallback = vi.fn<() => Promise<ScoreAnalysisResult>>().mockResolvedValue({
-      scoreLead: -0.3,
-      winrate: 0.47,
-      visits: 8,
-      ownership: Array.from({ length: 5 }, () => Array.from({ length: 5 }, () => 0)),
-      engine: "KataGo"
-    });
+    const state = createState();
 
-    const result = await runtime.analyzeInfluenceWithFallback({
-      state: createState(),
-      requestApiFallback: apiFallback
-    });
+    const first = await runtime.analyzeInfluence({ state });
+    const second = await runtime.analyzeInfluence({ state });
 
-    expect(apiFallback).toHaveBeenCalledTimes(1);
-    expect(result.source).toBe("api-fallback");
-    expect(result.quality).toBe("fallback");
+    expect(first.ownership).toEqual(second.ownership);
+    expect(worker.getPostCount()).toBe(1);
   });
 
-  it("propagates error when both local and API fallback fail", async () => {
+  it("propagates error when local estimator fails", async () => {
     installWorkerMock("error");
     const runtime = await import("../src/app/influenceRuntime");
-    const apiFallback = vi.fn<() => Promise<ScoreAnalysisResult>>().mockRejectedValue(
-      new Error("API fail")
-    );
 
-    await expect(
-      runtime.analyzeInfluenceWithFallback({
-        state: createState(),
-        requestApiFallback: apiFallback
-      })
-    ).rejects.toThrow("API fail");
+    await expect(runtime.analyzeInfluence({ state: createState() })).rejects.toThrow("local failed");
   });
 });

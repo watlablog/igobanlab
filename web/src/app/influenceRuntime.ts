@@ -8,6 +8,7 @@ type WorkerRequest =
       payload: {
         boardSize: number;
         stones: number[];
+        toPlay: "B" | "W";
         komi: number;
         capturesB: number;
         capturesW: number;
@@ -35,7 +36,6 @@ type PendingRequest = {
 
 type InfluenceRequestInput = {
   state: GameState;
-  requestApiFallback: () => Promise<ScoreAnalysisResult>;
   localTimeoutMs?: number;
 };
 
@@ -161,10 +161,7 @@ const makeCacheKey = (state: GameState): string => {
   ].join("|");
 };
 
-const runLocalInfluence = async (
-  state: GameState,
-  timeoutMs: number
-): Promise<ScoreAnalysisResult> => {
+const runLocalInfluence = async (state: GameState, timeoutMs: number): Promise<ScoreAnalysisResult> => {
   const requestId = ++workerRequestId;
   const startedAt = nowMs();
 
@@ -175,6 +172,7 @@ const runLocalInfluence = async (
       payload: {
         boardSize: state.boardSize,
         stones: Array.from(state.grid),
+        toPlay: state.toPlay,
         komi: state.komi,
         capturesB: state.captures.B,
         capturesW: state.captures.W
@@ -195,25 +193,14 @@ const runLocalInfluence = async (
     winrate: null,
     visits: null,
     ownership: cloneOwnership(response.payload.ownership),
-    engine: "Local(OGS-like)",
+    engine: "OGS-Estimator",
     blackScore: response.payload.blackScore,
     whiteScore: response.payload.whiteScore,
-    source: "local",
+    source: "local-estimator",
     elapsedMs: Math.round(nowMs() - startedAt),
     quality: "quick"
   };
 };
-
-const toFallbackResult = (
-  response: ScoreAnalysisResult,
-  startedAt: number
-): ScoreAnalysisResult => ({
-  ...response,
-  ownership: cloneOwnership(response.ownership),
-  source: "api-fallback",
-  elapsedMs: Math.round(nowMs() - startedAt),
-  quality: "fallback"
-});
 
 export const warmupInfluenceRuntime = async (): Promise<void> => {
   const requestId = ++workerRequestId;
@@ -223,26 +210,17 @@ export const warmupInfluenceRuntime = async (): Promise<void> => {
   }
 };
 
-export const analyzeInfluenceWithFallback = async ({
+export const analyzeInfluence = async ({
   state,
-  requestApiFallback,
   localTimeoutMs = DEFAULT_LOCAL_TIMEOUT_MS
 }: InfluenceRequestInput): Promise<ScoreAnalysisResult> => {
   const key = makeCacheKey(state);
   const cached = getCache(key);
   if (cached) return cached;
 
-  const startedAt = nowMs();
-  try {
-    const local = await runLocalInfluence(state, localTimeoutMs);
-    setCache(key, local);
-    return cloneScoreResult(local);
-  } catch {
-    const fallback = await requestApiFallback();
-    const mapped = toFallbackResult(fallback, startedAt);
-    setCache(key, mapped);
-    return cloneScoreResult(mapped);
-  }
+  const local = await runLocalInfluence(state, localTimeoutMs);
+  setCache(key, local);
+  return cloneScoreResult(local);
 };
 
 export const __internalForTests = {

@@ -12,12 +12,11 @@ import type {
   ScoreAnalysisResult
 } from "../types/models";
 import {
-  buildScoreAnalysisRequest,
   summarizeOwnership
 } from "./analysis";
 import { markerLabelFromInfluence } from "./influence";
 import {
-  analyzeInfluenceWithFallback,
+  analyzeInfluence,
   warmupInfluenceRuntime
 } from "./influenceRuntime";
 import {
@@ -38,10 +37,6 @@ import {
   resolveLayoutPreset,
   type LayoutPreset
 } from "./layout";
-import {
-  AnalysisApiError,
-  requestScoreAnalysis
-} from "../api/analysis";
 
 type AppScreen = "login" | "menu" | "setup" | "board";
 
@@ -188,7 +183,7 @@ export const App = () => {
   useEffect(() => {
     if (screen !== "board") return;
     void warmupInfluenceRuntime().catch(() => {
-      // Fallback path uses API score endpoint if local runtime is unavailable.
+      // Warmup failure is non-fatal. analyzeInfluence handles runtime errors.
     });
   }, [screen]);
 
@@ -269,9 +264,6 @@ export const App = () => {
   }, []);
 
   const formatAnalysisError = useCallback((error: unknown): string => {
-    if (error instanceof AnalysisApiError) {
-      return `${error.code}: ${error.message}`;
-    }
     if (error instanceof Error && error.message.trim().length > 0) {
       return error.message;
     }
@@ -287,23 +279,12 @@ export const App = () => {
     setAnalysisError(null);
 
     try {
-      const result = await analyzeInfluenceWithFallback({
-        state: displayState,
-        requestApiFallback: async () => {
-          const request = buildScoreAnalysisRequest(displayState, {
-            includeOwnership: true,
-            maxVisits: 8
-          });
-          return await requestScoreAnalysis(request, user?.uid);
-        }
+      const result = await analyzeInfluence({
+        state: displayState
       });
       if (analysisRequestIdRef.current !== requestId) return;
-      setScoreAnalysis(result);
-      setStatusMessage(
-        result.source === "api-fallback"
-          ? "勢力表示（APIフォールバック）を更新しました。"
-          : "勢力表示（ローカル）を更新しました。"
-      );
+      setScoreAnalysis({ ...result, source: "local-estimator" });
+      setStatusMessage("勢力表示（ローカルOGS推定）を更新しました。");
     } catch (error) {
       if (analysisRequestIdRef.current !== requestId) return;
       const message = formatAnalysisError(error);
@@ -314,7 +295,7 @@ export const App = () => {
         setAnalysisBusy(false);
       }
     }
-  }, [analysisBusy, displayState, formatAnalysisError, playEnabled, user?.uid]);
+  }, [analysisBusy, displayState, formatAnalysisError, playEnabled]);
 
   const handlePlay = useCallback(
     (x: number, y: number) => {

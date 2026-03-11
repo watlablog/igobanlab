@@ -97,7 +97,7 @@ export type ScoreAnalysisResult = {
   blackScore?: number;
   whiteScore?: number;
   deadStones?: { B: number; W: number };
-  source?: "local" | "api-fallback";
+  source?: "api-primary" | "local-estimator" | "local" | "api-fallback" | "local-fallback";
   elapsedMs?: number;
   quality?: "quick" | "fallback";
 };

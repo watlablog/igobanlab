@@ -98,6 +98,30 @@ describe("analysis api client", () => {
     });
   });
 
+  it("includes text response snippet for non-json error body", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 504,
+      headers: { get: () => "text/plain" },
+      text: async () => "upstream request timeout"
+    }) as unknown as typeof fetch;
+
+    await expect(
+      requestScoreAnalysis({
+        boardSize: 19,
+        komi: 6.5,
+        handicap: 0,
+        rules: "japanese",
+        moves: [],
+        maxVisits: 200,
+        includeOwnership: true
+      })
+    ).rejects.toMatchObject({
+      code: "ANALYSIS_REQUEST_FAILED",
+      status: 504
+    });
+  });
+
   it("throws when API returns html", async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -122,6 +146,38 @@ describe("analysis api client", () => {
     ).rejects.toMatchObject({
       code: "INVALID_API_RESPONSE",
       status: 200
+    });
+  });
+
+  it("throws API_TIMEOUT when request is aborted", async () => {
+    global.fetch = vi.fn(async (_input, init) => {
+      const signal = init?.signal as AbortSignal | undefined;
+      return await new Promise((_resolve, reject) => {
+        signal?.addEventListener("abort", () => {
+          const abortError = new Error("Aborted");
+          (abortError as Error & { name: string }).name = "AbortError";
+          reject(abortError);
+        });
+      });
+    }) as unknown as typeof fetch;
+
+    await expect(
+      requestScoreAnalysis(
+        {
+          boardSize: 19,
+          komi: 6.5,
+          handicap: 0,
+          rules: "japanese",
+          moves: [],
+          maxVisits: 200,
+          includeOwnership: true
+        },
+        undefined,
+        { timeoutMs: 5 }
+      )
+    ).rejects.toMatchObject({
+      code: "API_TIMEOUT",
+      status: 504
     });
   });
 });
