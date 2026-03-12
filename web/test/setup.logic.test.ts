@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyHandicapChange,
   applyKomiChange,
+  setupToHandicapSelection,
   setupFromDraft,
   type SetupDraft
 } from "../src/app/setupLogic";
@@ -50,5 +51,11 @@ describe("setupLogic", () => {
     const customSetup = setupFromDraft(customKomiDraft, 6.5);
     expect(customSetup.handicap).toBe(0);
     expect(customSetup.komi).toBe(1.5);
+  });
+
+  it("maps imported setup to handicap selection", () => {
+    expect(setupToHandicapSelection({ handicap: 4, komi: 0 })).toBe("h4");
+    expect(setupToHandicapSelection({ handicap: 0, komi: 0 })).toBe("teisen");
+    expect(setupToHandicapSelection({ handicap: 0, komi: 6.5 })).toBe("even");
   });
 });

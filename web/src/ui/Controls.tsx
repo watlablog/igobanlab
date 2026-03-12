@@ -14,6 +14,7 @@ type ControlsProps = {
   onUndo: () => void;
   onRedo: () => void;
   onNewGame: () => void;
+  onImportSgf: () => void;
   onExportSgf: () => void;
   onAnalyzeScore: () => void;
 };
@@ -31,6 +32,7 @@ export const Controls = ({
   onUndo,
   onRedo,
   onNewGame,
+  onImportSgf,
   onExportSgf,
   onAnalyzeScore
 }: ControlsProps) => (
@@ -49,6 +51,9 @@ export const Controls = ({
       </button>
       <button type="button" className="primary" onClick={onNewGame} disabled={disabled}>
         New Game
+      </button>
+      <button type="button" className="subtle full" onClick={onImportSgf} disabled={disabled}>
+        Import SGF
       </button>
       <button type="button" className="subtle full" onClick={onExportSgf} disabled={disabled}>
         Export SGF

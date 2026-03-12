@@ -52,6 +52,17 @@ export const selectionToHandicap = (selection: HandicapSelection): number => {
   return Number(selection.slice(1));
 };
 
+export const setupToHandicapSelection = (setup: Pick<GameSetup, "handicap" | "komi">): HandicapSelection => {
+  const handicap = Math.trunc(setup.handicap);
+  if (handicap >= 2 && handicap <= 9) {
+    return `h${handicap}` as HandicapSelection;
+  }
+  if (handicap === 0 && setup.komi === 0) {
+    return "teisen";
+  }
+  return "even";
+};
+
 export const setupFromDraft = (draft: SetupDraft, fallbackEvenKomi: number): GameSetup => {
   const boardSize = normalizeBoardSize(draft.boardSize);
   const fallbackKomi = draft.handicapSelection === "even" ? fallbackEvenKomi : 0;

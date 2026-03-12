@@ -58,6 +58,10 @@ button.subtle {
   justify-content: center;
 }
 
+.file-input-hidden {
+  display: none;
+}
+
 .header-card,
 .controls-card,
 .status-card,

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import type { ChangeEvent } from "react";
 import type { User } from "firebase/auth";
 import { Controls } from "../ui/Controls";
 import { GobanView } from "../ui/GobanView";
-import { exportMinimalSgf } from "../game/sgf";
+import { exportMinimalSgf, importSgf, SgfImportError } from "../game/sgf";
 import { createStateFromSetup, gameReducer, stateFromSnapshot } from "../game/state";
 import { saveActiveGame } from "../firebase/db";
 import { signInWithGoogle, signOutUser, subscribeAuth } from "../firebase/auth";
@@ -28,6 +29,7 @@ import {
   handicapSummaryLabel,
   isHandicapSelection,
   normalizeBoardSize,
+  setupToHandicapSelection,
   setupFromDraft,
   type HandicapSelection,
   type SetupDraft
@@ -100,6 +102,7 @@ export const App = () => {
   const [reviewPly, setReviewPly] = useState(0);
   const [isNoteExpanded, setIsNoteExpanded] = useState(false);
   const moveCountRef = useRef(0);
+  const sgfInputRef = useRef<HTMLInputElement | null>(null);
   const [analysisBusy, setAnalysisBusy] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [scoreAnalysis, setScoreAnalysis] = useState<ScoreAnalysisResult | null>(null);
@@ -345,6 +348,11 @@ export const App = () => {
     URL.revokeObjectURL(url);
   }, [state.boardSize, state.moves]);
 
+  const openImportSgfPicker = useCallback(() => {
+    if (interactionDisabled) return;
+    sgfInputRef.current?.click();
+  }, [interactionDisabled]);
+
   const openSetup = useCallback(() => {
     setSetupDraft({
       boardSize: activeSetup.boardSize,
@@ -416,6 +424,75 @@ export const App = () => {
     }
     return window.confirm(CLEAR_CONFIRM_MESSAGE);
   }, [needsClearConfirm]);
+
+  const applyImportedSgf = useCallback(
+    (sgfText: string, fileName: string) => {
+      const imported = importSgf(sgfText);
+      const importedSelection = setupToHandicapSelection(imported.setup);
+
+      setActiveSetup(imported.setup);
+      setActiveHandicapSelection(importedSelection);
+      setSetupDraft({
+        boardSize: imported.setup.boardSize,
+        komi: imported.setup.komi,
+        handicapSelection: importedSelection
+      });
+      if (importedSelection === "even") {
+        setEvenKomiMemory(imported.setup.komi);
+      }
+
+      setGameInfo({
+        gameDate: imported.metadata.gameDate,
+        blackName: imported.metadata.blackName,
+        whiteName: imported.metadata.whiteName,
+        blackRank: imported.metadata.blackRank,
+        whiteRank: imported.metadata.whiteRank,
+        location: imported.metadata.location
+      });
+
+      setMoveNotes({});
+      setReviewPly(imported.state.moves.length);
+      setIsNoteExpanded(false);
+      clearAnalysisState();
+      setAnalysisBusy(false);
+      moveCountRef.current = imported.state.moves.length;
+      dispatch({ type: "LOAD", state: imported.state });
+      setStatusMessage(`SGFを読み込みました: ${fileName}`);
+      setScreen("board");
+    },
+    [clearAnalysisState]
+  );
+
+  const handleImportSgfFile = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const input = event.currentTarget;
+      const file = input.files?.[0];
+      if (!file) {
+        return;
+      }
+
+      if (!confirmBoardClear()) {
+        input.value = "";
+        return;
+      }
+
+      try {
+        const sgfText = await file.text();
+        applyImportedSgf(sgfText, file.name);
+      } catch (error) {
+        const message =
+          error instanceof SgfImportError
+            ? error.message
+            : error instanceof Error && error.message.trim().length > 0
+              ? error.message
+              : "SGFの読み込みに失敗しました。";
+        setStatusMessage(`SGF読み込み失敗: ${message}`);
+      } finally {
+        input.value = "";
+      }
+    },
+    [applyImportedSgf, confirmBoardClear]
+  );
 
   const backToMenuFromBoard = useCallback(() => {
     if (!confirmBoardClear()) {
@@ -618,6 +695,14 @@ export const App = () => {
         </div>
       </header>
 
+      <input
+        ref={sgfInputRef}
+        className="file-input-hidden"
+        type="file"
+        accept=".sgf,application/x-go-sgf,text/plain"
+        onChange={(event) => void handleImportSgfFile(event)}
+      />
+
       <div className="workspace">
         <div className="board-panel">
           <section className="goban-card board-frame">
@@ -783,6 +868,7 @@ export const App = () => {
             onUndo={handleUndo}
             onRedo={handleRedo}
             onNewGame={handleNewGame}
+            onImportSgf={openImportSgfPicker}
             onExportSgf={handleExportSgf}
             onAnalyzeScore={() => void handleAnalyzeScore()}
           />
