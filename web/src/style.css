@@ -255,6 +255,26 @@ button.subtle {
   stroke-width: 0.05em;
 }
 
+.goban-view .shudan-vertex.shudan-marker_cross[title="deadstone-black"] .shudan-marker path {
+  stroke: rgba(255, 240, 240, 0.95);
+  stroke-width: 0.14em;
+  stroke-linecap: round;
+}
+
+.goban-view .shudan-vertex.shudan-marker_cross[title="deadstone-black"] .shudan-marker {
+  filter: drop-shadow(0 0 0.06em rgba(40, 20, 20, 0.7));
+}
+
+.goban-view .shudan-vertex.shudan-marker_cross[title="deadstone-white"] .shudan-marker path {
+  stroke: rgba(170, 30, 30, 0.95);
+  stroke-width: 0.14em;
+  stroke-linecap: round;
+}
+
+.goban-view .shudan-vertex.shudan-marker_cross[title="deadstone-white"] .shudan-marker {
+  filter: drop-shadow(0 0 0.06em rgba(255, 255, 255, 0.85));
+}
+
 .goban-view .shudan-vertex.shudan-selected .shudan-selection {
   width: 0.22em;
   height: 0.22em;

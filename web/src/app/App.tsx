@@ -106,6 +106,7 @@ export const App = () => {
   const [analysisBusy, setAnalysisBusy] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [scoreAnalysis, setScoreAnalysis] = useState<ScoreAnalysisResult | null>(null);
+  const [showDeadStoneOverlay, setShowDeadStoneOverlay] = useState(true);
   const analysisRequestIdRef = useRef(0);
 
   useEffect(() => {
@@ -215,11 +216,34 @@ export const App = () => {
     return stateFromSnapshot(snapshot);
   }, [reviewPly, state]);
 
+  const hasDeadStoneOverlay = useMemo(() => {
+    const deadStoneMap = scoreAnalysis?.deadStoneMap;
+    if (!deadStoneMap) return false;
+    for (const row of deadStoneMap) {
+      for (const cell of row) {
+        if (cell !== 0) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }, [scoreAnalysis?.deadStoneMap]);
+
   const overlayMarkerMap = useMemo(() => {
     const ownership = scoreAnalysis?.ownership;
-    if (!ownership) return undefined;
+    const deadStoneMap = scoreAnalysis?.deadStoneMap;
+    if (!ownership && !(showDeadStoneOverlay && deadStoneMap)) return undefined;
     return Array.from({ length: displayState.boardSize }, (_, y) =>
       Array.from({ length: displayState.boardSize }, (_, x) => {
+        const deadStone = showDeadStoneOverlay ? deadStoneMap?.[y]?.[x] ?? 0 : 0;
+        if (deadStone === 1) {
+          return { type: "cross" as const, label: "deadstone-black" };
+        }
+        if (deadStone === -1) {
+          return { type: "cross" as const, label: "deadstone-white" };
+        }
+
+        if (!ownership) return null;
         const ownershipValue = ownership[y]?.[x];
         if (typeof ownershipValue !== "number") return null;
         if (displayState.grid[y * displayState.boardSize + x] !== 0) return null;
@@ -227,7 +251,7 @@ export const App = () => {
         return label ? { type: "square" as const, label } : null;
       })
     );
-  }, [displayState.boardSize, displayState.grid, scoreAnalysis?.ownership]);
+  }, [displayState.boardSize, displayState.grid, scoreAnalysis?.deadStoneMap, scoreAnalysis?.ownership, showDeadStoneOverlay]);
 
   const selectedVertices = useMemo<[number, number][]>(() => {
     const lastMove = displayState.lastMove;
@@ -240,6 +264,10 @@ export const App = () => {
     setAnalysisBusy(false);
     setScoreAnalysis(null);
     setAnalysisError(null);
+  }, []);
+
+  const toggleDeadStoneOverlay = useCallback(() => {
+    setShowDeadStoneOverlay((prev) => !prev);
   }, []);
 
   const ownershipSummary = useMemo(
@@ -286,8 +314,8 @@ export const App = () => {
         state: displayState
       });
       if (analysisRequestIdRef.current !== requestId) return;
-      setScoreAnalysis({ ...result, source: "local-estimator" });
-      setStatusMessage("勢力表示（ローカルOGS推定）を更新しました。");
+      setScoreAnalysis(result);
+      setStatusMessage("勢力表示（Sabaki）を更新しました。");
     } catch (error) {
       if (analysisRequestIdRef.current !== requestId) return;
       const message = formatAnalysisError(error);
@@ -864,12 +892,15 @@ export const App = () => {
             scoreAnalysis={scoreAnalysis}
             ownershipSummary={ownershipSummary}
             analysisError={analysisError}
+            showDeadStoneOverlay={showDeadStoneOverlay}
+            hasDeadStoneOverlay={hasDeadStoneOverlay}
             onPass={handlePass}
             onUndo={handleUndo}
             onRedo={handleRedo}
             onNewGame={handleNewGame}
             onImportSgf={openImportSgfPicker}
             onExportSgf={handleExportSgf}
+            onToggleDeadStoneOverlay={toggleDeadStoneOverlay}
             onAnalyzeScore={() => void handleAnalyzeScore()}
           />
         </div>

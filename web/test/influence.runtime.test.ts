@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GameState } from "../src/types/models";
 
-type WorkerMode = "success" | "error";
+type WorkerMode = "success" | "fallback" | "error";
 
 const createState = (): GameState => ({
   boardSize: 5,
@@ -52,9 +52,14 @@ const installWorkerMock = (mode: WorkerMode): { getPostCount: () => number } => 
             id: message.id,
             payload: {
               ownership: Array.from({ length: 5 }, () => Array.from({ length: 5 }, () => 0)),
+              deadStoneMap: Array.from({ length: 5 }, (_, y) =>
+                Array.from({ length: 5 }, (_, x) => (y === x ? (x % 2 === 0 ? 1 : -1) : 0))
+              ),
+              deadStones: { B: 3, W: 2 },
               blackScore: 12,
               whiteScore: 10,
-              scoreLead: 2
+              scoreLead: 2,
+              quality: mode === "fallback" ? "fallback" : "quick"
             }
           }
         });
@@ -80,7 +85,7 @@ afterEach(() => {
 });
 
 describe("influence runtime", () => {
-  it("uses local estimator and returns OGS source metadata", async () => {
+  it("uses sabaki estimator and returns source metadata", async () => {
     installWorkerMock("success");
     const runtime = await import("../src/app/influenceRuntime");
 
@@ -88,8 +93,11 @@ describe("influence runtime", () => {
       state: createState()
     });
 
-    expect(result.source).toBe("local-estimator");
-    expect(result.engine).toBe("OGS-Estimator");
+    expect(result.source).toBe("sabaki-local");
+    expect(result.engine).toBe("Sabaki Influence+Deadstones");
+    expect(result.quality).toBe("quick");
+    expect(result.deadStones).toEqual({ B: 3, W: 2 });
+    expect(result.deadStoneMap?.[0]?.[0]).toBe(1);
   });
 
   it("uses cache for identical board states", async () => {
@@ -109,5 +117,13 @@ describe("influence runtime", () => {
     const runtime = await import("../src/app/influenceRuntime");
 
     await expect(runtime.analyzeInfluence({ state: createState() })).rejects.toThrow("local failed");
+  });
+
+  it("propagates fallback quality from worker", async () => {
+    installWorkerMock("fallback");
+    const runtime = await import("../src/app/influenceRuntime");
+
+    const result = await runtime.analyzeInfluence({ state: createState() });
+    expect(result.quality).toBe("fallback");
   });
 });

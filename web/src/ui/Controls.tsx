@@ -10,12 +10,15 @@ type ControlsProps = {
   scoreAnalysis: ScoreAnalysisResult | null;
   ownershipSummary: OwnershipSummary | null;
   analysisError: string | null;
+  showDeadStoneOverlay: boolean;
+  hasDeadStoneOverlay: boolean;
   onPass: () => void;
   onUndo: () => void;
   onRedo: () => void;
   onNewGame: () => void;
   onImportSgf: () => void;
   onExportSgf: () => void;
+  onToggleDeadStoneOverlay: () => void;
   onAnalyzeScore: () => void;
 };
 
@@ -28,12 +31,15 @@ export const Controls = ({
   scoreAnalysis,
   ownershipSummary,
   analysisError,
+  showDeadStoneOverlay,
+  hasDeadStoneOverlay,
   onPass,
   onUndo,
   onRedo,
   onNewGame,
   onImportSgf,
   onExportSgf,
+  onToggleDeadStoneOverlay,
   onAnalyzeScore
 }: ControlsProps) => (
   <section className="controls-card panel-card action-card">
@@ -62,7 +68,7 @@ export const Controls = ({
 
     <section className="analysis-card">
       <h3 className="analysis-title">解析</h3>
-      <div className="analysis-actions single">
+      <div className="analysis-actions">
         <button
           type="button"
           className="primary"
@@ -70,6 +76,14 @@ export const Controls = ({
           disabled={analysisDisabled || analysisBusy}
         >
           勢力表示
+        </button>
+        <button
+          type="button"
+          className="subtle"
+          onClick={onToggleDeadStoneOverlay}
+          disabled={!hasDeadStoneOverlay}
+        >
+          死石表示: {showDeadStoneOverlay ? "ON" : "OFF"}
         </button>
       </div>
 

@@ -22,9 +22,12 @@ type WorkerResponse =
       id: number;
       payload: {
         ownership: number[][];
+        deadStoneMap: Array<Array<-1 | 0 | 1>>;
+        deadStones: { B: number; W: number };
         blackScore: number;
         whiteScore: number;
         scoreLead: number;
+        quality: "quick" | "fallback";
       };
     }
   | { type: "error"; id: number; code: string; message: string };
@@ -73,9 +76,17 @@ const cloneOwnership = (ownership: number[][] | null): number[][] | null => {
   return ownership.map((row) => row.map((cell) => cell));
 };
 
+const cloneDeadStoneMap = (
+  deadStoneMap: Array<Array<-1 | 0 | 1>> | null | undefined
+): Array<Array<-1 | 0 | 1>> | null => {
+  if (!deadStoneMap) return null;
+  return deadStoneMap.map((row) => row.map((cell) => cell));
+};
+
 const cloneScoreResult = (result: ScoreAnalysisResult): ScoreAnalysisResult => ({
   ...result,
-  ownership: cloneOwnership(result.ownership)
+  ownership: cloneOwnership(result.ownership),
+  deadStoneMap: cloneDeadStoneMap(result.deadStoneMap)
 });
 
 const setCache = (key: string, value: ScoreAnalysisResult): void => {
@@ -193,12 +204,14 @@ const runLocalInfluence = async (state: GameState, timeoutMs: number): Promise<S
     winrate: null,
     visits: null,
     ownership: cloneOwnership(response.payload.ownership),
-    engine: "OGS-Estimator",
+    deadStoneMap: cloneDeadStoneMap(response.payload.deadStoneMap),
+    engine: "Sabaki Influence+Deadstones",
     blackScore: response.payload.blackScore,
     whiteScore: response.payload.whiteScore,
-    source: "local-estimator",
+    deadStones: response.payload.deadStones,
+    source: "sabaki-local",
     elapsedMs: Math.round(nowMs() - startedAt),
-    quality: "quick"
+    quality: response.payload.quality
   };
 };
 

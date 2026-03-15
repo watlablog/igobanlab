@@ -66,6 +66,7 @@ export type PlayerStone = 0 | 1 | 2;
 
 export type AnalysisRules = "japanese" | "chinese" | "aga" | "korean";
 export type OwnershipValue = number;
+export type DeadStoneCell = -1 | 0 | 1;
 
 export type AnalysisRequest = {
   boardSize: number;
@@ -93,11 +94,18 @@ export type ScoreAnalysisResult = {
   winrate: number | null;
   visits: number | null;
   ownership: OwnershipValue[][] | null;
+  deadStoneMap?: DeadStoneCell[][] | null;
   engine: string;
   blackScore?: number;
   whiteScore?: number;
   deadStones?: { B: number; W: number };
-  source?: "api-primary" | "local-estimator" | "local" | "api-fallback" | "local-fallback";
+  source?:
+    | "api-primary"
+    | "local-estimator"
+    | "sabaki-local"
+    | "local"
+    | "api-fallback"
+    | "local-fallback";
   elapsedMs?: number;
   quality?: "quick" | "fallback";
 };
